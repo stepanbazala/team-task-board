@@ -6,8 +6,11 @@
 /** Stavy úkolu */
 export type TaskStatus = "todo" | "in-progress" | "done";
 
-/** Kvartály roku */
-export type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
+/** Dynamický kvartál (např. "Q1/2026") */
+export interface QuarterDef {
+  id: string;
+  label: string; // např. "Q1/2026"
+}
 
 /** Člen týmu */
 export interface TeamMember {
@@ -28,14 +31,18 @@ export interface Task {
   description: string;
   /** Aktuální stav */
   status: TaskStatus;
-  /** Kvartál, do kterého úkol patří */
-  quarter: Quarter;
+  /** ID kvartálu, do kterého úkol patří */
+  quarterId: string;
   /** ID hlavní zodpovědné osoby */
   ownerId: string;
   /** ID osob, které na úkolu participují */
   participantIds: string[];
   /** Termín dokončení (ISO string) */
   dueDate: string;
+  /** Datum zahájení práce (ISO string) */
+  startDate?: string;
+  /** Důvod zpoždění (pokud se úkol zpožďuje) */
+  delayReason?: string;
   /** Nahraný obrázek jako Base64 data URL (pro Fázi 1) */
   imageUrl?: string;
   /** Datum vytvoření (ISO string) */
@@ -49,12 +56,4 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   "todo": "K řešení",
   "in-progress": "Probíhá",
   "done": "Hotovo",
-};
-
-/** Překlad kvartálů */
-export const QUARTER_LABELS: Record<Quarter, string> = {
-  Q1: "1. kvartál",
-  Q2: "2. kvartál",
-  Q3: "3. kvartál",
-  Q4: "4. kvartál",
 };

@@ -5,10 +5,21 @@
  * API je navržené tak, aby přechod byl co nejjednodušší.
  */
 
-import { Task, TeamMember } from "@/types/task";
+import { Task, TeamMember, QuarterDef } from "@/types/task";
 
 const TASKS_KEY = "taskboard_tasks";
 const MEMBERS_KEY = "taskboard_members";
+const QUARTERS_KEY = "taskboard_quarters";
+
+// ==========================================
+// Výchozí kvartály (demo data)
+// ==========================================
+const DEFAULT_QUARTERS: QuarterDef[] = [
+  { id: "q1-2026", label: "Q1/2026" },
+  { id: "q2-2026", label: "Q2/2026" },
+  { id: "q3-2026", label: "Q3/2026" },
+  { id: "q4-2026", label: "Q4/2026" },
+];
 
 // ==========================================
 // Výchozí členové týmu (demo data)
@@ -30,10 +41,11 @@ const DEFAULT_TASKS: Task[] = [
     title: "Redesign přihlašovací stránky",
     description: "Kompletní přepracování UI/UX přihlašovacího formuláře dle nového brandu.",
     status: "done",
-    quarter: "Q1",
+    quarterId: "q1-2026",
     ownerId: "m1",
     participantIds: ["m2", "m4"],
     dueDate: "2026-03-15",
+    startDate: "2026-01-10",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -42,10 +54,12 @@ const DEFAULT_TASKS: Task[] = [
     title: "Implementace notifikačního systému",
     description: "Push a in-app notifikace pro klíčové události (platby, upozornění, zprávy).",
     status: "in-progress",
-    quarter: "Q1",
+    quarterId: "q1-2026",
     ownerId: "m2",
     participantIds: ["m1", "m3"],
     dueDate: "2026-03-31",
+    startDate: "2026-02-15",
+    delayReason: "Čekáme na API třetí strany pro push notifikace.",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -54,7 +68,7 @@ const DEFAULT_TASKS: Task[] = [
     title: "API pro export dat",
     description: "REST endpoint pro export transakčních dat do CSV a PDF formátů.",
     status: "todo",
-    quarter: "Q2",
+    quarterId: "q2-2026",
     ownerId: "m3",
     participantIds: ["m5"],
     dueDate: "2026-06-15",
@@ -66,10 +80,11 @@ const DEFAULT_TASKS: Task[] = [
     title: "Optimalizace výkonu dashboardu",
     description: "Lazy loading, virtualizace seznamů a caching pro rychlejší načítání.",
     status: "in-progress",
-    quarter: "Q2",
+    quarterId: "q2-2026",
     ownerId: "m4",
     participantIds: ["m1", "m3"],
     dueDate: "2026-05-30",
+    startDate: "2026-04-01",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -78,7 +93,7 @@ const DEFAULT_TASKS: Task[] = [
     title: "Mobilní verze portfolia",
     description: "Responzivní design pro sekci investičního portfolia na mobilních zařízeních.",
     status: "todo",
-    quarter: "Q2",
+    quarterId: "q2-2026",
     ownerId: "m5",
     participantIds: ["m2", "m4"],
     dueDate: "2026-06-30",
@@ -88,7 +103,56 @@ const DEFAULT_TASKS: Task[] = [
 ];
 
 // ==========================================
-// Členové týmu
+// Kvartály – CRUD
+// ==========================================
+
+/** Načte všechny kvartály */
+export function getQuarters(): QuarterDef[] {
+  const data = localStorage.getItem(QUARTERS_KEY);
+  if (!data) {
+    localStorage.setItem(QUARTERS_KEY, JSON.stringify(DEFAULT_QUARTERS));
+    return DEFAULT_QUARTERS;
+  }
+  return JSON.parse(data);
+}
+
+function saveQuarters(quarters: QuarterDef[]): void {
+  localStorage.setItem(QUARTERS_KEY, JSON.stringify(quarters));
+}
+
+/** Přidá nový kvartál */
+export function addQuarter(label: string): QuarterDef {
+  const quarters = getQuarters();
+  const newQ: QuarterDef = {
+    id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+    label,
+  };
+  quarters.push(newQ);
+  saveQuarters(quarters);
+  return newQ;
+}
+
+/** Smaže kvartál */
+export function deleteQuarter(id: string): boolean {
+  const quarters = getQuarters();
+  const filtered = quarters.filter((q) => q.id !== id);
+  if (filtered.length === quarters.length) return false;
+  saveQuarters(filtered);
+  return true;
+}
+
+/** Aktualizuje kvartál */
+export function updateQuarter(id: string, label: string): QuarterDef | null {
+  const quarters = getQuarters();
+  const idx = quarters.findIndex((q) => q.id === id);
+  if (idx === -1) return null;
+  quarters[idx] = { ...quarters[idx], label };
+  saveQuarters(quarters);
+  return quarters[idx];
+}
+
+// ==========================================
+// Členové týmu – CRUD
 // ==========================================
 
 /** Načte všechny členy týmu */
@@ -101,9 +165,44 @@ export function getMembers(): TeamMember[] {
   return JSON.parse(data);
 }
 
+function saveMembers(members: TeamMember[]): void {
+  localStorage.setItem(MEMBERS_KEY, JSON.stringify(members));
+}
+
 /** Najde člena podle ID */
 export function getMemberById(id: string): TeamMember | undefined {
   return getMembers().find((m) => m.id === id);
+}
+
+/** Přidá nového člena */
+export function addMember(data: Omit<TeamMember, "id">): TeamMember {
+  const members = getMembers();
+  const newMember: TeamMember = {
+    ...data,
+    id: `m_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+  };
+  members.push(newMember);
+  saveMembers(members);
+  return newMember;
+}
+
+/** Aktualizuje člena */
+export function updateMember(id: string, data: Partial<Omit<TeamMember, "id">>): TeamMember | null {
+  const members = getMembers();
+  const idx = members.findIndex((m) => m.id === id);
+  if (idx === -1) return null;
+  members[idx] = { ...members[idx], ...data };
+  saveMembers(members);
+  return members[idx];
+}
+
+/** Smaže člena */
+export function deleteMember(id: string): boolean {
+  const members = getMembers();
+  const filtered = members.filter((m) => m.id !== id);
+  if (filtered.length === members.length) return false;
+  saveMembers(filtered);
+  return true;
 }
 
 // ==========================================
