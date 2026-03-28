@@ -3,10 +3,10 @@
  * Zobrazuje název, stav, zodpovědnou osobu a termín
  */
 
-import { Task, TeamMember } from "@/types/task";
+import { Task, TeamMember, QuarterDef } from "@/types/task";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Calendar, Pencil, Trash2 } from "lucide-react";
+import { Calendar, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 
@@ -14,12 +14,15 @@ interface TaskCardProps {
   task: Task;
   owner?: TeamMember;
   participants?: TeamMember[];
+  quarters: QuarterDef[];
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
   onClick: (task: Task) => void;
 }
 
-export function TaskCard({ task, owner, participants = [], onEdit, onDelete, onClick }: TaskCardProps) {
+export function TaskCard({ task, owner, participants = [], quarters, onEdit, onDelete, onClick }: TaskCardProps) {
+  const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
+
   return (
     <div
       className="george-card-hover p-4 cursor-pointer animate-fade-in"
@@ -27,7 +30,7 @@ export function TaskCard({ task, owner, participants = [], onEdit, onDelete, onC
     >
       {/* Horní řádek: kvartál + stav */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-primary">{task.quarter}</span>
+        <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
         <StatusBadge status={task.status} />
       </div>
 
@@ -40,6 +43,14 @@ export function TaskCard({ task, owner, participants = [], onEdit, onDelete, onC
       <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
         {task.description}
       </p>
+
+      {/* Zpoždění indikátor */}
+      {task.delayReason && (
+        <div className="flex items-center gap-1.5 text-xs text-destructive mb-3">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span className="line-clamp-1">{task.delayReason}</span>
+        </div>
+      )}
 
       {/* Náhled obrázku */}
       {task.imageUrl && (
@@ -55,9 +66,7 @@ export function TaskCard({ task, owner, participants = [], onEdit, onDelete, onC
       {/* Spodní řádek: avatar + termín + akce */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {/* Hlavní zodpovědná osoba */}
           {owner && <TeamAvatar member={owner} size="sm" />}
-          {/* Participanti – překrývající se avatary */}
           {participants.length > 0 && (
             <div className="flex -space-x-1.5">
               {participants.slice(0, 3).map((p) => (
@@ -73,13 +82,10 @@ export function TaskCard({ task, owner, participants = [], onEdit, onDelete, onC
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Termín */}
           <span className="text-xs text-muted-foreground flex items-center gap-1">
             <Calendar className="w-3.5 h-3.5" />
             {format(new Date(task.dueDate), "d. MMM", { locale: cs })}
           </span>
-
-          {/* Akční tlačítka */}
           <button
             className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
             onClick={(e) => { e.stopPropagation(); onEdit(task); }}

@@ -1,13 +1,12 @@
 /**
  * TaskDetailDialog – modální dialog s detailem úkolu
- * Zobrazuje všechny informace včetně obrázku
  */
 
-import { Task, STATUS_LABELS, QUARTER_LABELS, TeamMember } from "@/types/task";
+import { Task, STATUS_LABELS, TeamMember, QuarterDef } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Calendar, User, Users } from "lucide-react";
+import { Calendar, User, Users, AlertTriangle, Play } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 
@@ -17,32 +16,54 @@ interface TaskDetailDialogProps {
   task: Task | null;
   owner?: TeamMember;
   participants?: TeamMember[];
+  quarters?: QuarterDef[];
 }
 
-export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [] }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [] }: TaskDetailDialogProps) {
   if (!task) return null;
+  const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <span className="text-xs font-semibold text-primary">{QUARTER_LABELS[task.quarter]}</span>
+            <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
             <StatusBadge status={task.status} />
           </div>
           <DialogTitle className="text-xl leading-snug">{task.title}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Popis */}
           {task.description && (
             <p className="text-muted-foreground leading-relaxed">{task.description}</p>
           )}
 
-          {/* Obrázek */}
           {task.imageUrl && (
             <div className="rounded-lg overflow-hidden">
               <img src={task.imageUrl} alt="Příloha" className="w-full object-cover" />
+            </div>
+          )}
+
+          {/* Důvod zpoždění */}
+          {task.delayReason && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">Důvod zpoždění: </span>
+                {task.delayReason}
+              </div>
+            </div>
+          )}
+
+          {/* Datum zahájení */}
+          {task.startDate && (
+            <div className="flex items-center gap-2 text-sm">
+              <Play className="w-4 h-4 text-muted-foreground" />
+              <span className="text-muted-foreground">Zahájeno:</span>
+              <span className="font-medium">
+                {format(new Date(task.startDate), "d. MMMM yyyy", { locale: cs })}
+              </span>
             </div>
           )}
 
@@ -55,7 +76,6 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
             </span>
           </div>
 
-          {/* Zodpovědná osoba */}
           {owner && (
             <div className="flex items-center gap-3">
               <User className="w-4 h-4 text-muted-foreground" />
@@ -67,7 +87,6 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
             </div>
           )}
 
-          {/* Účastníci */}
           {participants.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">

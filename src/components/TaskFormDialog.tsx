@@ -1,10 +1,9 @@
 /**
  * TaskFormDialog – modální dialog pro vytvoření/editaci úkolu
- * Obsahuje formulář se všemi atributy úkolu
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Task, TaskStatus, Quarter, STATUS_LABELS, QUARTER_LABELS, TeamMember } from "@/types/task";
+import { Task, TaskStatus, QuarterDef, STATUS_LABELS, TeamMember } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,63 +19,63 @@ interface TaskFormDialogProps {
   onOpenChange: (open: boolean) => void;
   task?: Task | null;
   members: TeamMember[];
+  quarters: QuarterDef[];
   onSave: (data: Omit<Task, "id" | "createdAt" | "updatedAt">) => void;
 }
 
-export function TaskFormDialog({ open, onOpenChange, task, members, onSave }: TaskFormDialogProps) {
+export function TaskFormDialog({ open, onOpenChange, task, members, quarters, onSave }: TaskFormDialogProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("todo");
-  const [quarter, setQuarter] = useState<Quarter>("Q1");
+  const [quarterId, setQuarterId] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [delayReason, setDelayReason] = useState("");
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Při otevření dialogu naplníme formulář daty (editace) nebo vynulujeme (nový)
   useEffect(() => {
     if (task) {
       setTitle(task.title);
       setDescription(task.description);
       setStatus(task.status);
-      setQuarter(task.quarter);
+      setQuarterId(task.quarterId);
       setOwnerId(task.ownerId);
       setParticipantIds(task.participantIds);
       setDueDate(task.dueDate);
+      setStartDate(task.startDate || "");
+      setDelayReason(task.delayReason || "");
       setImageUrl(task.imageUrl);
     } else {
       setTitle("");
       setDescription("");
       setStatus("todo");
-      setQuarter("Q1");
+      setQuarterId(quarters[0]?.id || "");
       setOwnerId(members[0]?.id || "");
       setParticipantIds([]);
       setDueDate("");
+      setStartDate("");
+      setDelayReason("");
       setImageUrl(undefined);
     }
-  }, [task, open, members]);
+  }, [task, open, members, quarters]);
 
-  /** Nahrání obrázku – převod na Base64 */
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setImageUrl(reader.result as string);
-    };
+    reader.onloadend = () => setImageUrl(reader.result as string);
     reader.readAsDataURL(file);
   };
 
-  /** Toggle účastníka */
   const toggleParticipant = (memberId: string) => {
     setParticipantIds((prev) =>
       prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
     );
   };
 
-  /** Odeslání formuláře */
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !ownerId || !dueDate) return;
@@ -85,10 +84,12 @@ export function TaskFormDialog({ open, onOpenChange, task, members, onSave }: Ta
       title: title.trim(),
       description: description.trim(),
       status,
-      quarter,
+      quarterId,
       ownerId,
       participantIds: participantIds.filter((id) => id !== ownerId),
       dueDate,
+      startDate: startDate || undefined,
+      delayReason: delayReason.trim() || undefined,
       imageUrl,
     });
     onOpenChange(false);
@@ -107,25 +108,13 @@ export function TaskFormDialog({ open, onOpenChange, task, members, onSave }: Ta
           {/* Název */}
           <div className="space-y-2">
             <Label htmlFor="title">Název úkolu *</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Např. Redesign hlavní stránky"
-              required
-            />
+            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Např. Redesign hlavní stránky" required />
           </div>
 
           {/* Popis */}
           <div className="space-y-2">
             <Label htmlFor="description">Popis</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detailní popis úkolu..."
-              rows={3}
-            />
+            <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detailní popis úkolu..." rows={3} />
           </div>
 
           {/* Stav + Kvartál */}
@@ -143,27 +132,33 @@ export function TaskFormDialog({ open, onOpenChange, task, members, onSave }: Ta
             </div>
             <div className="space-y-2">
               <Label>Kvartál</Label>
-              <Select value={quarter} onValueChange={(v) => setQuarter(v as Quarter)}>
+              <Select value={quarterId} onValueChange={setQuarterId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.keys(QUARTER_LABELS) as Quarter[]).map((q) => (
-                    <SelectItem key={q} value={q}>{QUARTER_LABELS[q]}</SelectItem>
+                  {quarters.map((q) => (
+                    <SelectItem key={q.id} value={q.id}>{q.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {/* Termín */}
+          {/* Termíny */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="startDate">Datum zahájení</Label>
+              <Input id="startDate" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dueDate">Termín dokončení *</Label>
+              <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} required />
+            </div>
+          </div>
+
+          {/* Důvod zpoždění */}
           <div className="space-y-2">
-            <Label htmlFor="dueDate">Termín dokončení *</Label>
-            <Input
-              id="dueDate"
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              required
-            />
+            <Label htmlFor="delayReason">Důvod zpoždění</Label>
+            <Textarea id="delayReason" value={delayReason} onChange={(e) => setDelayReason(e.target.value)} placeholder="Vyplňte pokud se úkol zpožďuje..." rows={2} />
           </div>
 
           {/* Zodpovědná osoba */}
@@ -188,18 +183,13 @@ export function TaskFormDialog({ open, onOpenChange, task, members, onSave }: Ta
           <div className="space-y-2">
             <Label>Účastníci</Label>
             <div className="space-y-2">
-              {members
-                .filter((m) => m.id !== ownerId)
-                .map((m) => (
-                  <label key={m.id} className="flex items-center gap-3 cursor-pointer">
-                    <Checkbox
-                      checked={participantIds.includes(m.id)}
-                      onCheckedChange={() => toggleParticipant(m.id)}
-                    />
-                    <TeamAvatar member={m} size="sm" />
-                    <span className="text-sm">{m.name}</span>
-                  </label>
-                ))}
+              {members.filter((m) => m.id !== ownerId).map((m) => (
+                <label key={m.id} className="flex items-center gap-3 cursor-pointer">
+                  <Checkbox checked={participantIds.includes(m.id)} onCheckedChange={() => toggleParticipant(m.id)} />
+                  <TeamAvatar member={m} size="sm" />
+                  <span className="text-sm">{m.name}</span>
+                </label>
+              ))}
             </div>
           </div>
 
@@ -209,41 +199,23 @@ export function TaskFormDialog({ open, onOpenChange, task, members, onSave }: Ta
             {imageUrl ? (
               <div className="relative rounded-lg overflow-hidden">
                 <img src={imageUrl} alt="Náhled" className="w-full h-40 object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setImageUrl(undefined)}
-                  className="absolute top-2 right-2 p-1 rounded-full bg-foreground/60 text-background hover:bg-foreground/80 transition-colors"
-                >
+                <button type="button" onClick={() => setImageUrl(undefined)} className="absolute top-2 right-2 p-1 rounded-full bg-foreground/60 text-background hover:bg-foreground/80 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full h-24 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-              >
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full h-24 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors">
                 <ImagePlus className="w-6 h-6" />
                 <span className="text-sm">Nahrát obrázek</span>
               </button>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           </div>
 
           {/* Tlačítka */}
           <div className="flex gap-3 pt-2">
-            <Button type="submit" className="flex-1">
-              {task ? "Uložit změny" : "Vytvořit úkol"}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Zrušit
-            </Button>
+            <Button type="submit" className="flex-1">{task ? "Uložit změny" : "Vytvořit úkol"}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Zrušit</Button>
           </div>
         </form>
       </DialogContent>
