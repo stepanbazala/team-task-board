@@ -2,95 +2,107 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* 
+ * Design System – inspirováno George od České spořitelny
+ * Čistý, moderní, vzdušný design s modrou jako primární barvou
+ * Všechny barvy jsou v HSL formátu
+ */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Hlavní pozadí – velmi světle šedé (vzdušné) */
+    --background: 220 20% 97%;
+    --foreground: 215 25% 15%;
 
+    /* Karty – čistě bílé */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 215 25% 15%;
 
+    /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 215 25% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primární modrá – George styl */
+    --primary: 214 80% 40%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Sekundární – jemná modrošedá */
+    --secondary: 214 30% 95%;
+    --secondary-foreground: 214 80% 40%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted – tlumené pozadí */
+    --muted: 220 15% 94%;
+    --muted-foreground: 215 15% 50%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent – světle modrý hover */
+    --accent: 214 60% 95%;
+    --accent-foreground: 214 80% 35%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Borders – jemné */
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 214 80% 40%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Stavové barvy úkolů */
+    --status-todo: 214 80% 40%;
+    --status-progress: 36 95% 50%;
+    --status-done: 152 60% 40%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Kvartálové barvy */
+    --quarter-q1: 214 80% 40%;
+    --quarter-q2: 280 60% 50%;
+    --quarter-q3: 36 95% 50%;
+    --quarter-q4: 152 60% 40%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Zelená pro hodnoty/výsledky */
+    --success: 152 60% 30%;
+    --success-foreground: 0 0% 100%;
 
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 25% 15%;
+    --sidebar-primary: 214 80% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 60% 95%;
+    --sidebar-accent-foreground: 214 80% 35%;
+    --sidebar-border: 214 20% 90%;
+    --sidebar-ring: 214 80% 40%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
+    --background: 215 25% 10%;
+    --foreground: 210 20% 92%;
+    --card: 215 25% 14%;
+    --card-foreground: 210 20% 92%;
+    --popover: 215 25% 14%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 214 80% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 20% 20%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 215 20% 18%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 214 40% 22%;
+    --accent-foreground: 214 80% 70%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 215 20% 22%;
+    --input: 215 20% 22%;
+    --ring: 214 80% 55%;
+    --sidebar-background: 215 25% 12%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-primary: 214 80% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 214 40% 22%;
+    --sidebar-accent-foreground: 214 80% 70%;
+    --sidebar-border: 215 20% 22%;
+    --sidebar-ring: 214 80% 55%;
   }
 }
 
@@ -100,6 +112,31 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Typografie ve stylu George – čistá, moderní */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+}
+
+@layer utilities {
+  /* George-style card shadow */
+  .george-card {
+    @apply bg-card rounded-xl border border-border;
+    box-shadow: 0 1px 3px 0 hsl(214 20% 50% / 0.06),
+                0 4px 12px 0 hsl(214 20% 50% / 0.04);
+  }
+
+  .george-card-hover {
+    @apply george-card transition-shadow duration-200;
+  }
+  .george-card-hover:hover {
+    box-shadow: 0 4px 16px 0 hsl(214 20% 50% / 0.12),
+                0 8px 24px 0 hsl(214 20% 50% / 0.06);
   }
 }
