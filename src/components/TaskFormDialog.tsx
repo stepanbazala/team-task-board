@@ -1,9 +1,10 @@
 /**
  * TaskFormDialog – modální dialog pro vytvoření/editaci úkolu
+ * Auto-save při kliknutí na pozadí, multi-image (max 6), kategorie
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Task, TaskStatus, QuarterDef, STATUS_LABELS, TeamMember } from "@/types/task";
+import { Task, TaskStatus, QuarterDef, STATUS_LABELS, TeamMember, CategoryDef } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,16 +15,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { ImagePlus, X } from "lucide-react";
 
+const MAX_IMAGES = 6;
+
 interface TaskFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task?: Task | null;
   members: TeamMember[];
   quarters: QuarterDef[];
+  segments: CategoryDef[];
+  deliveryTypes: CategoryDef[];
   onSave: (data: Omit<Task, "id" | "createdAt" | "updatedAt">) => void;
 }
 
-export function TaskFormDialog({ open, onOpenChange, task, members, quarters, onSave }: TaskFormDialogProps) {
+export function TaskFormDialog({ open, onOpenChange, task, members, quarters, segments, deliveryTypes, onSave }: TaskFormDialogProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("todo");
@@ -34,8 +39,11 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
   const [startDate, setStartDate] = useState("");
   const [delayReason, setDelayReason] = useState("");
   const [newQuarterId, setNewQuarterId] = useState<string | undefined>();
-  const [imageUrl, setImageUrl] = useState<string | undefined>();
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [segmentId, setSegmentId] = useState<string | undefined>();
+  const [deliveryTypeId, setDeliveryTypeId] = useState<string | undefined>();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cancelRef = useRef(false);
 
   useEffect(() => {
     if (task) {
@@ -49,7 +57,9 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
       setStartDate(task.startDate || "");
       setDelayReason(task.delayReason || "");
       setNewQuarterId(task.newQuarterId);
-      setImageUrl(task.imageUrl);
+      setImageUrls(task.imageUrls || (task.imageUrl ? [task.imageUrl] : []));
+      setSegmentId(task.segmentId);
+      setDeliveryTypeId(task.deliveryTypeId);
     } else {
       setTitle("");
       setDescription("");
@@ -61,16 +71,29 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
       setStartDate("");
       setDelayReason("");
       setNewQuarterId(undefined);
-      setImageUrl(undefined);
+      setImageUrls([]);
+      setSegmentId(undefined);
+      setDeliveryTypeId(undefined);
     }
+    cancelRef.current = false;
   }, [task, open, members, quarters]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setImageUrl(reader.result as string);
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
+    const remaining = MAX_IMAGES - imageUrls.length;
+    const toProcess = files.slice(0, remaining);
+    toProcess.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageUrls((prev) => prev.length < MAX_IMAGES ? [...prev, reader.result as string] : prev);
+      };
+      reader.readAsDataURL(file);
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeImage = (index: number) => {
+    setImageUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   const toggleParticipant = (memberId: string) => {
@@ -79,11 +102,9 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !ownerId || !dueDate) return;
-
-    onSave({
+  const buildData = (): Omit<Task, "id" | "createdAt" | "updatedAt"> | null => {
+    if (!title.trim() || !ownerId || !dueDate) return null;
+    return {
       title: title.trim(),
       description: description.trim(),
       status,
@@ -94,14 +115,40 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
       startDate: startDate || undefined,
       delayReason: delayReason.trim() || undefined,
       newQuarterId: delayReason.trim() ? newQuarterId : undefined,
-      imageUrl,
-    });
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+      segmentId,
+      deliveryTypeId,
+    };
+  };
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const data = buildData();
+    if (!data) return;
+    onSave(data);
     onOpenChange(false);
   };
 
+  const handleCancel = () => {
+    cancelRef.current = true;
+    onOpenChange(false);
+  };
+
+  /** Auto-save: při zavření dialogu (backdrop/escape) uložíme pokud nejde o cancel */
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen && !cancelRef.current) {
+      const data = buildData();
+      if (data) {
+        onSave(data);
+      }
+    }
+    cancelRef.current = false;
+    onOpenChange(newOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => { e.preventDefault(); const data = buildData(); if (data) { onSave(data); } onOpenChange(false); }}>
         <DialogHeader>
           <DialogTitle className="text-xl">
             {task ? "Upravit úkol" : "Nový úkol"}
@@ -147,6 +194,34 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
             </div>
           </div>
 
+          {/* Segment + Druh dodávky */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Segment</Label>
+              <Select value={segmentId || "__none__"} onValueChange={(v) => setSegmentId(v === "__none__" ? undefined : v)}>
+                <SelectTrigger><SelectValue placeholder="Vyberte" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Bez segmentu —</SelectItem>
+                  {segments.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Druh dodávky</Label>
+              <Select value={deliveryTypeId || "__none__"} onValueChange={(v) => setDeliveryTypeId(v === "__none__" ? undefined : v)}>
+                <SelectTrigger><SelectValue placeholder="Vyberte" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Bez typu —</SelectItem>
+                  {deliveryTypes.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           {/* Termíny */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -165,7 +240,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
             <Textarea id="delayReason" value={delayReason} onChange={(e) => setDelayReason(e.target.value)} placeholder="Vyplňte pokud se úkol zpožďuje..." rows={2} />
           </div>
 
-          {/* Nově plánované dodání – zobrazí se jen když je vyplněn důvod zpoždění */}
+          {/* Nově plánované dodání */}
           {delayReason.trim() && (
             <div className="space-y-2 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
               <Label>Nově plánované dodání</Label>
@@ -212,29 +287,31 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
             </div>
           </div>
 
-          {/* Obrázek */}
+          {/* Obrázky – multi upload */}
           <div className="space-y-2">
-            <Label>Příloha (obrázek)</Label>
-            {imageUrl ? (
-              <div className="relative rounded-lg overflow-hidden">
-                <img src={imageUrl} alt="Náhled" className="w-full h-40 object-cover" />
-                <button type="button" onClick={() => setImageUrl(undefined)} className="absolute top-2 right-2 p-1 rounded-full bg-foreground/60 text-background hover:bg-foreground/80 transition-colors">
-                  <X className="w-4 h-4" />
+            <Label>Přílohy – obrázky (max {MAX_IMAGES})</Label>
+            <div className="flex gap-2 flex-wrap">
+              {imageUrls.map((url, i) => (
+                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border-2 border-border">
+                  <img src={url} alt={`Příloha ${i + 1}`} className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removeImage(i)} className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-foreground/60 text-background hover:bg-foreground/80 transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+              {imageUrls.length < MAX_IMAGES && (
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="w-16 h-16 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                  <ImagePlus className="w-5 h-5" />
                 </button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full h-24 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-                <ImagePlus className="w-6 h-6" />
-                <span className="text-sm">Nahrát obrázek</span>
-              </button>
-            )}
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
           </div>
 
           {/* Tlačítka */}
           <div className="flex gap-3 pt-2">
             <Button type="submit" className="flex-1">{task ? "Uložit změny" : "Vytvořit úkol"}</Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Zrušit</Button>
+            <Button type="button" variant="outline" onClick={handleCancel}>Zrušit</Button>
           </div>
         </form>
       </DialogContent>

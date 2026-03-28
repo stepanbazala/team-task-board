@@ -1,12 +1,12 @@
 /**
  * TaskCard – karta úkolu pro kanban board
- * Zobrazuje název, stav, zodpovědnou osobu a termín
- * Čárkovaný okraj pro úkoly přesunuté z jiného kvartálu
+ * Miniaturní obrázky, kategorie tagy, ztučněný čárkovaný okraj pro přeplánované úkoly
  */
 
-import { Task, TeamMember, QuarterDef } from "@/types/task";
+import { Task, TeamMember, QuarterDef, CategoryDef } from "@/types/task";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { Calendar, Pencil, Trash2, AlertTriangle, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
@@ -16,7 +16,8 @@ interface TaskCardProps {
   owner?: TeamMember;
   participants?: TeamMember[];
   quarters: QuarterDef[];
-  /** Zda se úkol zobrazuje ve svém newQuarterId (přesunutý) */
+  segments?: CategoryDef[];
+  deliveryTypes?: CategoryDef[];
   isRescheduled?: boolean;
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
@@ -24,13 +25,16 @@ interface TaskCardProps {
   onClick: (task: Task) => void;
 }
 
-export function TaskCard({ task, owner, participants = [], quarters, isRescheduled, onEdit, onDelete, onDuplicate, onClick }: TaskCardProps) {
+export function TaskCard({ task, owner, participants = [], quarters, segments = [], deliveryTypes = [], isRescheduled, onEdit, onDelete, onDuplicate, onClick }: TaskCardProps) {
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
   const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
+  const segmentLabel = task.segmentId ? segments.find((s) => s.id === task.segmentId)?.label : undefined;
+  const deliveryLabel = task.deliveryTypeId ? deliveryTypes.find((d) => d.id === task.deliveryTypeId)?.label : undefined;
+  const images = task.imageUrls || (task.imageUrl ? [task.imageUrl] : []);
 
   return (
     <div
-      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-2 border-dashed border-destructive/50" : ""}`}
+      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-[3px] border-dashed border-destructive" : ""}`}
       onClick={() => onClick(task)}
     >
       {/* Horní řádek: dodání + stav */}
@@ -45,14 +49,22 @@ export function TaskCard({ task, owner, participants = [], quarters, isReschedul
       </div>
 
       {/* Název úkolu */}
-      <h3 className="font-semibold text-card-foreground mb-2 leading-snug">
-        {task.title}
-      </h3>
+      <h3 className="font-semibold text-card-foreground mb-2 leading-snug">{task.title}</h3>
+
+      {/* Kategorie tagy */}
+      {(segmentLabel || deliveryLabel) && (
+        <div className="flex gap-1.5 mb-2 flex-wrap">
+          {segmentLabel && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">{segmentLabel}</span>
+          )}
+          {deliveryLabel && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent text-accent-foreground">{deliveryLabel}</span>
+          )}
+        </div>
+      )}
 
       {/* Popis – zkrácený */}
-      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-        {task.description}
-      </p>
+      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{task.description}</p>
 
       {/* Zpoždění indikátor */}
       {task.delayReason && (
@@ -62,14 +74,14 @@ export function TaskCard({ task, owner, participants = [], quarters, isReschedul
         </div>
       )}
 
-      {/* Náhled obrázku */}
-      {task.imageUrl && (
-        <div className="mb-3 rounded-lg overflow-hidden">
-          <img src={task.imageUrl} alt="Příloha úkolu" className="w-full h-32 object-cover" />
+      {/* Miniatury obrázků */}
+      {images.length > 0 && (
+        <div className="mb-3">
+          <ImageLightbox images={images} />
         </div>
       )}
 
-      {/* Spodní řádek: avatar + termín + akce */}
+      {/* Spodní řádek */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {owner && <TeamAvatar member={owner} size="sm" />}
@@ -93,26 +105,14 @@ export function TaskCard({ task, owner, participants = [], quarters, isReschedul
             {format(new Date(task.dueDate), "d. MMM", { locale: cs })}
           </span>
           {onDuplicate && (
-            <button
-              className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
-              onClick={(e) => { e.stopPropagation(); onDuplicate(task); }}
-              title="Duplikovat"
-            >
+            <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors" onClick={(e) => { e.stopPropagation(); onDuplicate(task); }} title="Duplikovat">
               <Copy className="w-3.5 h-3.5" />
             </button>
           )}
-          <button
-            className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
-            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
-            title="Upravit"
-          >
+          <button className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors" onClick={(e) => { e.stopPropagation(); onEdit(task); }} title="Upravit">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button
-            className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-            onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-            title="Smazat"
-          >
+          <button className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} title="Smazat">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>

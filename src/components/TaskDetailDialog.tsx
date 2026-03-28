@@ -1,11 +1,13 @@
 /**
  * TaskDetailDialog – modální dialog s detailem úkolu
+ * Obrázky jako miniatury s lightboxem, kategorie tagy
  */
 
-import { Task, STATUS_LABELS, TeamMember, QuarterDef } from "@/types/task";
+import { Task, STATUS_LABELS, TeamMember, QuarterDef, CategoryDef } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { Calendar, User, Users, AlertTriangle, Play, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
@@ -17,18 +19,23 @@ interface TaskDetailDialogProps {
   owner?: TeamMember;
   participants?: TeamMember[];
   quarters?: QuarterDef[];
+  segments?: CategoryDef[];
+  deliveryTypes?: CategoryDef[];
 }
 
-export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [] }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [], segments = [], deliveryTypes = [] }: TaskDetailDialogProps) {
   if (!task) return null;
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
   const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
+  const segmentLabel = task.segmentId ? segments.find((s) => s.id === task.segmentId)?.label : undefined;
+  const deliveryLabel = task.deliveryTypeId ? deliveryTypes.find((d) => d.id === task.deliveryTypeId)?.label : undefined;
+  const images = task.imageUrls || (task.imageUrl ? [task.imageUrl] : []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
             <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
             {newQuarterLabel && (
               <>
@@ -42,17 +49,31 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
         </DialogHeader>
 
         <div className="space-y-5">
+          {/* Kategorie tagy */}
+          {(segmentLabel || deliveryLabel) && (
+            <div className="flex gap-2 flex-wrap">
+              {segmentLabel && (
+                <span className="text-xs font-medium px-3 py-1 rounded-full bg-primary/10 text-primary">{segmentLabel}</span>
+              )}
+              {deliveryLabel && (
+                <span className="text-xs font-medium px-3 py-1 rounded-full bg-accent text-accent-foreground">{deliveryLabel}</span>
+              )}
+            </div>
+          )}
+
           {task.description && (
             <p className="text-muted-foreground leading-relaxed">{task.description}</p>
           )}
 
-          {task.imageUrl && (
-            <div className="rounded-lg overflow-hidden">
-              <img src={task.imageUrl} alt="Příloha" className="w-full object-cover" />
+          {/* Obrázky jako miniatury s lightboxem */}
+          {images.length > 0 && (
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Přílohy ({images.length})</p>
+              <ImageLightbox images={images} />
             </div>
           )}
 
-          {/* Důvod zpoždění + nové dodání */}
+          {/* Důvod zpoždění */}
           {task.delayReason && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -70,18 +91,14 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
             <div className="flex items-center gap-2 text-sm">
               <Play className="w-4 h-4 text-muted-foreground" />
               <span className="text-muted-foreground">Zahájeno:</span>
-              <span className="font-medium">
-                {format(new Date(task.startDate), "d. MMMM yyyy", { locale: cs })}
-              </span>
+              <span className="font-medium">{format(new Date(task.startDate), "d. MMMM yyyy", { locale: cs })}</span>
             </div>
           )}
 
           <div className="flex items-center gap-2 text-sm">
             <Calendar className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Termín:</span>
-            <span className="font-medium">
-              {format(new Date(task.dueDate), "d. MMMM yyyy", { locale: cs })}
-            </span>
+            <span className="font-medium">{format(new Date(task.dueDate), "d. MMMM yyyy", { locale: cs })}</span>
           </div>
 
           {owner && (
