@@ -43,6 +43,8 @@ export interface Task {
   startDate?: string;
   /** Důvod zpoždění (pokud se úkol zpožďuje) */
   delayReason?: string;
+  /** Nově plánované dodání – ID kvartálu, pokud se úkol přesunul */
+  newQuarterId?: string;
   /** Nahraný obrázek jako Base64 data URL (pro Fázi 1) */
   imageUrl?: string;
   /** Datum vytvoření (ISO string) */

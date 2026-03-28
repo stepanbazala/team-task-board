@@ -6,7 +6,7 @@ import { Task, STATUS_LABELS, TeamMember, QuarterDef } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Calendar, User, Users, AlertTriangle, Play } from "lucide-react";
+import { Calendar, User, Users, AlertTriangle, Play, ArrowRight } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 
@@ -22,6 +22,7 @@ interface TaskDetailDialogProps {
 export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [] }: TaskDetailDialogProps) {
   if (!task) return null;
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
+  const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -29,6 +30,12 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
             <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
+            {newQuarterLabel && (
+              <>
+                <ArrowRight className="w-3 h-3 text-destructive" />
+                <span className="text-xs font-semibold text-destructive">{newQuarterLabel}</span>
+              </>
+            )}
             <StatusBadge status={task.status} />
           </div>
           <DialogTitle className="text-xl leading-snug">{task.title}</DialogTitle>
@@ -45,18 +52,20 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
             </div>
           )}
 
-          {/* Důvod zpoždění */}
+          {/* Důvod zpoždění + nové dodání */}
           {task.delayReason && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
                 <span className="font-medium">Důvod zpoždění: </span>
                 {task.delayReason}
+                {newQuarterLabel && (
+                  <div className="mt-1 font-medium">Nově plánované dodání: {newQuarterLabel}</div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Datum zahájení */}
           {task.startDate && (
             <div className="flex items-center gap-2 text-sm">
               <Play className="w-4 h-4 text-muted-foreground" />
@@ -67,7 +76,6 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
             </div>
           )}
 
-          {/* Termín */}
           <div className="flex items-center gap-2 text-sm">
             <Calendar className="w-4 h-4 text-muted-foreground" />
             <span className="text-muted-foreground">Termín:</span>

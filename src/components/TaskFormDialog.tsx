@@ -33,6 +33,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
   const [dueDate, setDueDate] = useState("");
   const [startDate, setStartDate] = useState("");
   const [delayReason, setDelayReason] = useState("");
+  const [newQuarterId, setNewQuarterId] = useState<string | undefined>();
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,6 +48,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
       setDueDate(task.dueDate);
       setStartDate(task.startDate || "");
       setDelayReason(task.delayReason || "");
+      setNewQuarterId(task.newQuarterId);
       setImageUrl(task.imageUrl);
     } else {
       setTitle("");
@@ -58,6 +60,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
       setDueDate("");
       setStartDate("");
       setDelayReason("");
+      setNewQuarterId(undefined);
       setImageUrl(undefined);
     }
   }, [task, open, members, quarters]);
@@ -90,6 +93,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
       dueDate,
       startDate: startDate || undefined,
       delayReason: delayReason.trim() || undefined,
+      newQuarterId: delayReason.trim() ? newQuarterId : undefined,
       imageUrl,
     });
     onOpenChange(false);
@@ -117,7 +121,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
             <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detailní popis úkolu..." rows={3} />
           </div>
 
-          {/* Stav + Kvartál */}
+          {/* Stav + Dodání */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Stav</Label>
@@ -131,7 +135,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Kvartál</Label>
+              <Label>Dodání</Label>
               <Select value={quarterId} onValueChange={setQuarterId}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -160,6 +164,21 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, on
             <Label htmlFor="delayReason">Důvod zpoždění</Label>
             <Textarea id="delayReason" value={delayReason} onChange={(e) => setDelayReason(e.target.value)} placeholder="Vyplňte pokud se úkol zpožďuje..." rows={2} />
           </div>
+
+          {/* Nově plánované dodání – zobrazí se jen když je vyplněn důvod zpoždění */}
+          {delayReason.trim() && (
+            <div className="space-y-2 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+              <Label>Nově plánované dodání</Label>
+              <Select value={newQuarterId || ""} onValueChange={(v) => setNewQuarterId(v || undefined)}>
+                <SelectTrigger><SelectValue placeholder="Vyberte nové období" /></SelectTrigger>
+                <SelectContent>
+                  {quarters.map((q) => (
+                    <SelectItem key={q.id} value={q.id}>{q.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Zodpovědná osoba */}
           <div className="space-y-2">
