@@ -1,16 +1,21 @@
 /**
- * SettingsDialog – spojený dialog pro správu kvartálů a členů týmu
+ * SettingsDialog – spojený dialog pro správu kvartálů, členů, segmentů a druhů dodávky
  */
 
 import { useState } from "react";
-import { QuarterDef, TeamMember } from "@/types/task";
-import { addQuarter, deleteQuarter, updateQuarter, addMember, updateMember, deleteMember } from "@/services/storage";
+import { QuarterDef, TeamMember, CategoryDef } from "@/types/task";
+import {
+  addQuarter, deleteQuarter, updateQuarter,
+  addMember, updateMember, deleteMember,
+  addSegment, updateSegment, deleteSegment,
+  addDeliveryType, updateDeliveryType, deleteDeliveryType,
+} from "@/services/storage";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2, Pencil, Check, X, CalendarDays, Users } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, CalendarDays, Users, Tag, Package } from "lucide-react";
 import { toast } from "sonner";
 
 function makeInitials(name: string): string {
@@ -22,7 +27,6 @@ function randomColor(): string {
   return `hsl(${hue}, 65%, 45%)`;
 }
 
-/** Třídí kvartály podle roku a čísla (Q1/2026 < Q2/2026 < Q1/2027) */
 function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
   return [...quarters].sort((a, b) => {
     const parseQ = (label: string) => {
@@ -32,9 +36,71 @@ function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
     };
     const pa = parseQ(a.label);
     const pb = parseQ(b.label);
-    if (pa.y !== pb.y) return pb.y - pa.y; // novější rok nahoře
+    if (pa.y !== pb.y) return pb.y - pa.y;
     return pa.q - pb.q;
   });
+}
+
+/** Generická CRUD sekce pro jednoduché položky (kvartály, segmenty, druhy dodávky) */
+function CrudSection({ items, onAdd, onUpdate, onDelete, placeholder, entityName }: {
+  items: { id: string; label: string }[];
+  onAdd: (label: string) => void;
+  onUpdate: (id: string, label: string) => void;
+  onDelete: (id: string) => void;
+  placeholder: string;
+  entityName: string;
+}) {
+  const [newLabel, setNewLabel] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+
+  const handleAdd = () => {
+    if (!newLabel.trim()) return;
+    onAdd(newLabel.trim());
+    setNewLabel("");
+    toast.success(`${entityName} přidán(a)`);
+  };
+
+  const handleSave = () => {
+    if (!editingId || !editLabel.trim()) return;
+    onUpdate(editingId, editLabel.trim());
+    setEditingId(null);
+    toast.success(`${entityName} upraven(a)`);
+  };
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm(`Smazat ${entityName.toLowerCase()}?`)) return;
+    onDelete(id);
+    toast.success(`${entityName} smazán(a)`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder={placeholder} onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
+        <Button onClick={handleAdd} size="sm"><Plus className="w-4 h-4 mr-1" /> Přidat</Button>
+      </div>
+      <div className="space-y-2 max-h-60 overflow-y-auto">
+        {items.map((item) => (
+          <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50">
+            {editingId === item.id ? (
+              <>
+                <Input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} className="h-8 text-sm" onKeyDown={(e) => e.key === "Enter" && handleSave()} />
+                <button onClick={handleSave} className="p-1 text-primary hover:bg-accent rounded"><Check className="w-4 h-4" /></button>
+                <button onClick={() => setEditingId(null)} className="p-1 text-muted-foreground hover:bg-accent rounded"><X className="w-4 h-4" /></button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm font-medium">{item.label}</span>
+                <button onClick={() => { setEditingId(item.id); setEditLabel(item.label); }} className="p-1 text-muted-foreground hover:text-primary hover:bg-accent rounded"><Pencil className="w-3.5 h-3.5" /></button>
+                <button onClick={() => handleDelete(item.id)} className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 interface Props {
@@ -42,43 +108,18 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   quarters: QuarterDef[];
   members: TeamMember[];
+  segments: CategoryDef[];
+  deliveryTypes: CategoryDef[];
   onChanged: () => void;
 }
 
-export function SettingsDialog({ open, onOpenChange, quarters, members, onChanged }: Props) {
-  const [newLabel, setNewLabel] = useState("");
-  const [editingQId, setEditingQId] = useState<string | null>(null);
-  const [editQLabel, setEditQLabel] = useState("");
-
+export function SettingsDialog({ open, onOpenChange, quarters, members, segments, deliveryTypes, onChanged }: Props) {
   const [newName, setNewName] = useState("");
   const [editingMId, setEditingMId] = useState<string | null>(null);
   const [editMName, setEditMName] = useState("");
 
   const sortedQuarters = sortQuarters(quarters);
 
-  // --- Quarter handlers ---
-  const handleAddQ = () => {
-    if (!newLabel.trim()) return;
-    addQuarter(newLabel.trim());
-    setNewLabel("");
-    onChanged();
-    toast.success("Období přidáno");
-  };
-  const handleDeleteQ = (id: string) => {
-    if (!window.confirm("Smazat toto období?")) return;
-    deleteQuarter(id);
-    onChanged();
-    toast.success("Období smazáno");
-  };
-  const handleEditQSave = () => {
-    if (!editingQId || !editQLabel.trim()) return;
-    updateQuarter(editingQId, editQLabel.trim());
-    setEditingQId(null);
-    onChanged();
-    toast.success("Období upraveno");
-  };
-
-  // --- Member handlers ---
   const handleAddM = () => {
     const name = newName.trim();
     if (!name) return;
@@ -109,40 +150,31 @@ export function SettingsDialog({ open, onOpenChange, quarters, members, onChange
         </DialogHeader>
 
         <Tabs defaultValue="quarters" className="mt-2">
-          <TabsList className="w-full">
-            <TabsTrigger value="quarters" className="flex-1 gap-1.5">
-              <CalendarDays className="w-4 h-4" /> Období
+          <TabsList className="w-full grid grid-cols-4">
+            <TabsTrigger value="quarters" className="gap-1 text-xs px-1">
+              <CalendarDays className="w-3.5 h-3.5" /> Období
             </TabsTrigger>
-            <TabsTrigger value="members" className="flex-1 gap-1.5">
-              <Users className="w-4 h-4" /> Tým
+            <TabsTrigger value="members" className="gap-1 text-xs px-1">
+              <Users className="w-3.5 h-3.5" /> Tým
+            </TabsTrigger>
+            <TabsTrigger value="segments" className="gap-1 text-xs px-1">
+              <Tag className="w-3.5 h-3.5" /> Segmenty
+            </TabsTrigger>
+            <TabsTrigger value="deliveryTypes" className="gap-1 text-xs px-1">
+              <Package className="w-3.5 h-3.5" /> Dodávky
             </TabsTrigger>
           </TabsList>
 
-          {/* Období / Kvartály */}
-          <TabsContent value="quarters" className="space-y-4 mt-4">
-            <div className="flex gap-2">
-              <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Např. Q1/2027" onKeyDown={(e) => e.key === "Enter" && handleAddQ()} />
-              <Button onClick={handleAddQ} size="sm"><Plus className="w-4 h-4 mr-1" /> Přidat</Button>
-            </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {sortedQuarters.map((q) => (
-                <div key={q.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50">
-                  {editingQId === q.id ? (
-                    <>
-                      <Input value={editQLabel} onChange={(e) => setEditQLabel(e.target.value)} className="h-8 text-sm" onKeyDown={(e) => e.key === "Enter" && handleEditQSave()} />
-                      <button onClick={handleEditQSave} className="p-1 text-primary hover:bg-accent rounded"><Check className="w-4 h-4" /></button>
-                      <button onClick={() => setEditingQId(null)} className="p-1 text-muted-foreground hover:bg-accent rounded"><X className="w-4 h-4" /></button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex-1 text-sm font-medium">{q.label}</span>
-                      <button onClick={() => { setEditingQId(q.id); setEditQLabel(q.label); }} className="p-1 text-muted-foreground hover:text-primary hover:bg-accent rounded"><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleDeleteQ(q.id)} className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
+          {/* Období */}
+          <TabsContent value="quarters" className="mt-4">
+            <CrudSection
+              items={sortedQuarters}
+              onAdd={(label) => { addQuarter(label); onChanged(); }}
+              onUpdate={(id, label) => { updateQuarter(id, label); onChanged(); }}
+              onDelete={(id) => { deleteQuarter(id); onChanged(); }}
+              placeholder="Např. Q1/2027"
+              entityName="Období"
+            />
           </TabsContent>
 
           {/* Tým */}
@@ -171,6 +203,30 @@ export function SettingsDialog({ open, onOpenChange, quarters, members, onChange
                 </div>
               ))}
             </div>
+          </TabsContent>
+
+          {/* Segmenty */}
+          <TabsContent value="segments" className="mt-4">
+            <CrudSection
+              items={segments}
+              onAdd={(label) => { addSegment(label); onChanged(); }}
+              onUpdate={(id, label) => { updateSegment(id, label); onChanged(); }}
+              onDelete={(id) => { deleteSegment(id); onChanged(); }}
+              placeholder="Např. Retail, Corporate..."
+              entityName="Segment"
+            />
+          </TabsContent>
+
+          {/* Druhy dodávky */}
+          <TabsContent value="deliveryTypes" className="mt-4">
+            <CrudSection
+              items={deliveryTypes}
+              onAdd={(label) => { addDeliveryType(label); onChanged(); }}
+              onUpdate={(id, label) => { updateDeliveryType(id, label); onChanged(); }}
+              onDelete={(id) => { deleteDeliveryType(id); onChanged(); }}
+              placeholder="Např. Vývoj, Analýza..."
+              entityName="Druh dodávky"
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>
