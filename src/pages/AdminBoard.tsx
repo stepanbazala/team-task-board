@@ -1,24 +1,24 @@
 /**
  * AdminBoard – hlavní stránka pro správu úkolů (kanban board)
- * Drag & drop, multi-kvartál filtr (setříděný), správa nastavení, duplikace úkolů
+ * Drag & drop, multi-kvartál filtr, filtr dle vlastníka, správa nastavení, duplikace, kategorie
  */
 
 import { useState, useCallback } from "react";
-import { Task, TaskStatus, STATUS_LABELS, QuarterDef } from "@/types/task";
-import { getTasks, getMembers, getQuarters, createTask, updateTask, deleteTask } from "@/services/storage";
+import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef } from "@/types/task";
+import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, createTask, updateTask, deleteTask } from "@/services/storage";
 import { TaskCard } from "@/components/TaskCard";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { TeamAvatar } from "@/components/TeamAvatar";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutDashboard, Settings } from "lucide-react";
+import { Plus, LayoutDashboard, Settings, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 
 const STATUSES: TaskStatus[] = ["todo", "in-progress", "done"];
 
-/** Třídí kvartály: nejnovější rok nahoře, pak Q1 → Q4 */
 function sortQuarterButtons(quarters: QuarterDef[]): QuarterDef[] {
   return [...quarters].sort((a, b) => {
     const parse = (label: string) => {
@@ -36,7 +36,10 @@ export default function AdminBoard() {
   const [tasks, setTasks] = useState<Task[]>(getTasks);
   const [members, setMembers] = useState(getMembers);
   const [quarters, setQuarters] = useState<QuarterDef[]>(getQuarters);
+  const [segments, setSegments] = useState<CategoryDef[]>(getSegments);
+  const [deliveryTypes, setDeliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -47,20 +50,22 @@ export default function AdminBoard() {
     setTasks(getTasks());
     setMembers(getMembers());
     setQuarters(getQuarters());
+    setSegments(getSegments());
+    setDeliveryTypes(getDeliveryTypes());
   }, []);
 
-  /** Filtrované úkoly: originální kvartál NEBO newQuarterId odpovídá filtru */
-  const filteredTasks = selectedQuarters.length === 0
-    ? tasks
-    : tasks.filter((t) =>
-        selectedQuarters.includes(t.quarterId) ||
-        (t.newQuarterId && selectedQuarters.includes(t.newQuarterId))
-      );
+  /** Filtr: kvartál + vlastník */
+  const filteredTasks = tasks.filter((t) => {
+    const matchQ = selectedQuarters.length === 0 ||
+      selectedQuarters.includes(t.quarterId) ||
+      (t.newQuarterId && selectedQuarters.includes(t.newQuarterId));
+    const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
+    return matchQ && matchOwner;
+  });
 
   const tasksByStatus = (status: TaskStatus) =>
     filteredTasks.filter((t) => t.status === status);
 
-  /** Zjistí zda je úkol "přeplánovaný" – zobrazuje se ve filtru kvůli newQuarterId */
   const isRescheduled = (task: Task) => {
     if (selectedQuarters.length === 0 || !task.newQuarterId) return false;
     return !selectedQuarters.includes(task.quarterId) && selectedQuarters.includes(task.newQuarterId);
@@ -111,20 +116,23 @@ export default function AdminBoard() {
     setFormOpen(true);
   };
 
-  /** Duplikace úkolu – vytvoří kopii s prefixem */
+  /** Duplikace: pokud je vybraný kvartál filtr, zduplikovaný úkol dostane ten kvartál */
   const handleDuplicate = (task: Task) => {
+    const targetQuarterId = selectedQuarters.length === 1 ? selectedQuarters[0] : task.quarterId;
     createTask({
       title: `${task.title} (kopie)`,
       description: task.description,
       status: "todo",
-      quarterId: task.quarterId,
+      quarterId: targetQuarterId,
       ownerId: task.ownerId,
       participantIds: task.participantIds,
       dueDate: task.dueDate,
       startDate: undefined,
       delayReason: undefined,
       newQuarterId: undefined,
-      imageUrl: task.imageUrl,
+      imageUrls: task.imageUrls,
+      segmentId: task.segmentId,
+      deliveryTypeId: task.deliveryTypeId,
     });
     refresh();
     toast.success("Úkol byl duplikován");
@@ -156,26 +164,37 @@ export default function AdminBoard() {
         </div>
       </header>
 
-      {/* Multi-kvartál filtr – setříděný */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant={selectedQuarters.length === 0 ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedQuarters([])}
-          >
-            Vše
-          </Button>
+      {/* Filtry: kvartály + vlastník */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-3">
+        {/* Kvartální filtr */}
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs text-muted-foreground font-medium mr-1">Období:</span>
+          <Button variant={selectedQuarters.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedQuarters([])}>Vše</Button>
           {sortedQuarters.map((q) => (
+            <Button key={q.id} variant={selectedQuarters.includes(q.id) ? "default" : "outline"} size="sm" onClick={() => toggleQuarter(q.id)}>{q.label}</Button>
+          ))}
+        </div>
+        {/* Filtr dle vlastníka */}
+        <div className="flex gap-2 flex-wrap items-center">
+          <span className="text-xs text-muted-foreground font-medium mr-1">Osoba:</span>
+          <Button variant={!selectedOwnerId ? "default" : "outline"} size="sm" onClick={() => setSelectedOwnerId(null)}>Všichni</Button>
+          {members.map((m) => (
             <Button
-              key={q.id}
-              variant={selectedQuarters.includes(q.id) ? "default" : "outline"}
+              key={m.id}
+              variant={selectedOwnerId === m.id ? "default" : "outline"}
               size="sm"
-              onClick={() => toggleQuarter(q.id)}
+              onClick={() => setSelectedOwnerId(selectedOwnerId === m.id ? null : m.id)}
+              className="gap-1.5"
             >
-              {q.label}
+              <TeamAvatar member={m} size="sm" />
+              {m.initials}
             </Button>
           ))}
+          {selectedOwnerId && (
+            <Button variant="ghost" size="sm" onClick={() => setSelectedOwnerId(null)}>
+              <X className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -188,42 +207,27 @@ export default function AdminBoard() {
               return (
                 <div key={status}>
                   <div className="flex items-center gap-2 mb-4">
-                    <span
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{
-                        backgroundColor:
-                          status === "todo" ? "hsl(var(--status-todo))" :
-                          status === "in-progress" ? "hsl(var(--status-progress))" :
-                          "hsl(var(--status-done))",
-                      }}
-                    />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{
+                      backgroundColor: status === "todo" ? "hsl(var(--status-todo))" : status === "in-progress" ? "hsl(var(--status-progress))" : "hsl(var(--status-done))",
+                    }} />
                     <h2 className="font-semibold text-foreground">{STATUS_LABELS[status]}</h2>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                      {columnTasks.length}
-                    </span>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{columnTasks.length}</span>
                   </div>
 
                   <Droppable droppableId={status}>
                     {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={`space-y-3 min-h-[120px] rounded-xl p-2 transition-colors ${snapshot.isDraggingOver ? "bg-accent/50" : ""}`}
-                      >
+                      <div ref={provided.innerRef} {...provided.droppableProps} className={`space-y-3 min-h-[120px] rounded-xl p-2 transition-colors ${snapshot.isDraggingOver ? "bg-accent/50" : ""}`}>
                         {columnTasks.map((task, index) => (
                           <Draggable key={task.id} draggableId={task.id} index={index}>
                             {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={snapshot.isDragging ? "opacity-90" : ""}
-                              >
+                              <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className={snapshot.isDragging ? "opacity-90" : ""}>
                                 <TaskCard
                                   task={task}
                                   owner={findMember(task.ownerId)}
                                   participants={task.participantIds.map((id) => findMember(id)).filter(Boolean) as any}
                                   quarters={quarters}
+                                  segments={segments}
+                                  deliveryTypes={deliveryTypes}
                                   isRescheduled={isRescheduled(task)}
                                   onEdit={handleEdit}
                                   onDelete={handleDelete}
@@ -236,9 +240,7 @@ export default function AdminBoard() {
                         ))}
                         {provided.placeholder}
                         {columnTasks.length === 0 && !snapshot.isDraggingOver && (
-                          <div className="george-card p-6 text-center text-sm text-muted-foreground">
-                            Žádné úkoly
-                          </div>
+                          <div className="george-card p-6 text-center text-sm text-muted-foreground">Žádné úkoly</div>
                         )}
                       </div>
                     )}
@@ -251,29 +253,9 @@ export default function AdminBoard() {
       </div>
 
       {/* Dialogy */}
-      <TaskFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        task={editingTask}
-        members={members}
-        quarters={quarters}
-        onSave={handleSave}
-      />
-      <TaskDetailDialog
-        open={!!detailTask}
-        onOpenChange={() => setDetailTask(null)}
-        task={detailTask}
-        owner={detailTask ? findMember(detailTask.ownerId) : undefined}
-        participants={detailTask?.participantIds.map((id) => findMember(id)).filter(Boolean) as any}
-        quarters={quarters}
-      />
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        quarters={quarters}
-        members={members}
-        onChanged={refresh}
-      />
+      <TaskFormDialog open={formOpen} onOpenChange={setFormOpen} task={editingTask} members={members} quarters={quarters} segments={segments} deliveryTypes={deliveryTypes} onSave={handleSave} />
+      <TaskDetailDialog open={!!detailTask} onOpenChange={() => setDetailTask(null)} task={detailTask} owner={detailTask ? findMember(detailTask.ownerId) : undefined} participants={detailTask?.participantIds.map((id) => findMember(id)).filter(Boolean) as any} quarters={quarters} segments={segments} deliveryTypes={deliveryTypes} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} quarters={quarters} members={members} segments={segments} deliveryTypes={deliveryTypes} onChanged={refresh} />
     </div>
   );
 }
