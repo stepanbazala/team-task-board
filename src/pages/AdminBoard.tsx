@@ -1,6 +1,6 @@
 /**
  * AdminBoard – hlavní stránka pro správu úkolů (kanban board)
- * Drag & drop mezi sloupci, multi-kvartál filtr, správa členů i kvartálů
+ * Drag & drop, multi-kvartál filtr (setříděný), správa nastavení, duplikace úkolů
  */
 
 import { useState, useCallback } from "react";
@@ -9,15 +9,27 @@ import { getTasks, getMembers, getQuarters, createTask, updateTask, deleteTask }
 import { TaskCard } from "@/components/TaskCard";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
-import { QuarterManagerDialog } from "@/components/QuarterManagerDialog";
-import { MemberManagerDialog } from "@/components/MemberManagerDialog";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutDashboard, Settings, Users } from "lucide-react";
+import { Plus, LayoutDashboard, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 
 const STATUSES: TaskStatus[] = ["todo", "in-progress", "done"];
+
+/** Třídí kvartály: nejnovější rok nahoře, pak Q1 → Q4 */
+function sortQuarterButtons(quarters: QuarterDef[]): QuarterDef[] {
+  return [...quarters].sort((a, b) => {
+    const parse = (label: string) => {
+      const m = label.match(/Q(\d)\/(\d{4})/i);
+      return m ? { q: parseInt(m[1]), y: parseInt(m[2]) } : { q: 0, y: 0 };
+    };
+    const pa = parse(a.label), pb = parse(b.label);
+    if (pa.y !== pb.y) return pb.y - pa.y;
+    return pa.q - pb.q;
+  });
+}
 
 export default function AdminBoard() {
   const navigate = useNavigate();
@@ -26,12 +38,10 @@ export default function AdminBoard() {
   const [quarters, setQuarters] = useState<QuarterDef[]>(getQuarters);
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
 
-  // Dialogy
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [detailTask, setDetailTask] = useState<Task | null>(null);
-  const [quartersDialogOpen, setQuartersDialogOpen] = useState(false);
-  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const refresh = useCallback(() => {
     setTasks(getTasks());
@@ -39,22 +49,29 @@ export default function AdminBoard() {
     setQuarters(getQuarters());
   }, []);
 
-  /** Filtrované úkoly podle vybraných kvartálů */
+  /** Filtrované úkoly: originální kvartál NEBO newQuarterId odpovídá filtru */
   const filteredTasks = selectedQuarters.length === 0
     ? tasks
-    : tasks.filter((t) => selectedQuarters.includes(t.quarterId));
+    : tasks.filter((t) =>
+        selectedQuarters.includes(t.quarterId) ||
+        (t.newQuarterId && selectedQuarters.includes(t.newQuarterId))
+      );
 
   const tasksByStatus = (status: TaskStatus) =>
     filteredTasks.filter((t) => t.status === status);
 
-  /** Toggle kvartál ve filtru */
+  /** Zjistí zda je úkol "přeplánovaný" – zobrazuje se ve filtru kvůli newQuarterId */
+  const isRescheduled = (task: Task) => {
+    if (selectedQuarters.length === 0 || !task.newQuarterId) return false;
+    return !selectedQuarters.includes(task.quarterId) && selectedQuarters.includes(task.newQuarterId);
+  };
+
   const toggleQuarter = (qId: string) => {
     setSelectedQuarters((prev) =>
       prev.includes(qId) ? prev.filter((id) => id !== qId) : [...prev, qId]
     );
   };
 
-  /** Drag & drop handler */
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
     const newStatus = result.destination.droppableId as TaskStatus;
@@ -94,7 +111,27 @@ export default function AdminBoard() {
     setFormOpen(true);
   };
 
+  /** Duplikace úkolu – vytvoří kopii s prefixem */
+  const handleDuplicate = (task: Task) => {
+    createTask({
+      title: `${task.title} (kopie)`,
+      description: task.description,
+      status: "todo",
+      quarterId: task.quarterId,
+      ownerId: task.ownerId,
+      participantIds: task.participantIds,
+      dueDate: task.dueDate,
+      startDate: undefined,
+      delayReason: undefined,
+      newQuarterId: undefined,
+      imageUrl: task.imageUrl,
+    });
+    refresh();
+    toast.success("Úkol byl duplikován");
+  };
+
   const findMember = (id: string) => members.find((m) => m.id === id);
+  const sortedQuarters = sortQuarterButtons(quarters);
 
   return (
     <div className="min-h-screen bg-background">
@@ -106,11 +143,8 @@ export default function AdminBoard() {
             <p className="text-sm text-muted-foreground mt-0.5">Týmový pracovní board</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setMembersDialogOpen(true)}>
-              <Users className="w-4 h-4 mr-1" /> Tým
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuartersDialogOpen(true)}>
-              <Settings className="w-4 h-4 mr-1" /> Kvartály
+            <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+              <Settings className="w-4 h-4 mr-1" /> Nastavení
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
               <LayoutDashboard className="w-4 h-4 mr-1" /> Dashboard
@@ -122,7 +156,7 @@ export default function AdminBoard() {
         </div>
       </header>
 
-      {/* Multi-kvartál filtr */}
+      {/* Multi-kvartál filtr – setříděný */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
         <div className="flex gap-2 flex-wrap">
           <Button
@@ -132,7 +166,7 @@ export default function AdminBoard() {
           >
             Vše
           </Button>
-          {quarters.map((q) => (
+          {sortedQuarters.map((q) => (
             <Button
               key={q.id}
               variant={selectedQuarters.includes(q.id) ? "default" : "outline"}
@@ -145,7 +179,7 @@ export default function AdminBoard() {
         </div>
       </div>
 
-      {/* Kanban sloupce s drag & drop */}
+      {/* Kanban sloupce */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-8">
         <DragDropContext onDragEnd={handleDragEnd}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -190,8 +224,10 @@ export default function AdminBoard() {
                                   owner={findMember(task.ownerId)}
                                   participants={task.participantIds.map((id) => findMember(id)).filter(Boolean) as any}
                                   quarters={quarters}
+                                  isRescheduled={isRescheduled(task)}
                                   onEdit={handleEdit}
                                   onDelete={handleDelete}
+                                  onDuplicate={handleDuplicate}
                                   onClick={setDetailTask}
                                 />
                               </div>
@@ -231,15 +267,10 @@ export default function AdminBoard() {
         participants={detailTask?.participantIds.map((id) => findMember(id)).filter(Boolean) as any}
         quarters={quarters}
       />
-      <QuarterManagerDialog
-        open={quartersDialogOpen}
-        onOpenChange={setQuartersDialogOpen}
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
         quarters={quarters}
-        onChanged={refresh}
-      />
-      <MemberManagerDialog
-        open={membersDialogOpen}
-        onOpenChange={setMembersDialogOpen}
         members={members}
         onChanged={refresh}
       />

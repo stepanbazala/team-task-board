@@ -1,12 +1,13 @@
 /**
  * TaskCard – karta úkolu pro kanban board
  * Zobrazuje název, stav, zodpovědnou osobu a termín
+ * Čárkovaný okraj pro úkoly přesunuté z jiného kvartálu
  */
 
 import { Task, TeamMember, QuarterDef } from "@/types/task";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Calendar, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { Calendar, Pencil, Trash2, AlertTriangle, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 
@@ -15,22 +16,31 @@ interface TaskCardProps {
   owner?: TeamMember;
   participants?: TeamMember[];
   quarters: QuarterDef[];
+  /** Zda se úkol zobrazuje ve svém newQuarterId (přesunutý) */
+  isRescheduled?: boolean;
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
+  onDuplicate?: (task: Task) => void;
   onClick: (task: Task) => void;
 }
 
-export function TaskCard({ task, owner, participants = [], quarters, onEdit, onDelete, onClick }: TaskCardProps) {
+export function TaskCard({ task, owner, participants = [], quarters, isRescheduled, onEdit, onDelete, onDuplicate, onClick }: TaskCardProps) {
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
+  const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
 
   return (
     <div
-      className="george-card-hover p-4 cursor-pointer animate-fade-in"
+      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-2 border-dashed border-destructive/50" : ""}`}
       onClick={() => onClick(task)}
     >
-      {/* Horní řádek: kvartál + stav */}
+      {/* Horní řádek: dodání + stav */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
+          {newQuarterLabel && (
+            <span className="text-xs font-semibold text-destructive">→ {newQuarterLabel}</span>
+          )}
+        </div>
         <StatusBadge status={task.status} />
       </div>
 
@@ -55,11 +65,7 @@ export function TaskCard({ task, owner, participants = [], quarters, onEdit, onD
       {/* Náhled obrázku */}
       {task.imageUrl && (
         <div className="mb-3 rounded-lg overflow-hidden">
-          <img
-            src={task.imageUrl}
-            alt="Příloha úkolu"
-            className="w-full h-32 object-cover"
-          />
+          <img src={task.imageUrl} alt="Příloha úkolu" className="w-full h-32 object-cover" />
         </div>
       )}
 
@@ -86,6 +92,15 @@ export function TaskCard({ task, owner, participants = [], quarters, onEdit, onD
             <Calendar className="w-3.5 h-3.5" />
             {format(new Date(task.dueDate), "d. MMM", { locale: cs })}
           </span>
+          {onDuplicate && (
+            <button
+              className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+              onClick={(e) => { e.stopPropagation(); onDuplicate(task); }}
+              title="Duplikovat"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
             onClick={(e) => { e.stopPropagation(); onEdit(task); }}
