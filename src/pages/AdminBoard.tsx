@@ -12,7 +12,8 @@ import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutDashboard, Settings, X } from "lucide-react";
+import { Plus, LayoutDashboard, Settings, X, Filter } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
@@ -40,6 +41,9 @@ export default function AdminBoard() {
   const [deliveryTypes, setDeliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedDeliveryTypeId, setSelectedDeliveryTypeId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -54,13 +58,22 @@ export default function AdminBoard() {
     setDeliveryTypes(getDeliveryTypes());
   }, []);
 
-  /** Filtr: kvartál + vlastník */
+  const activeFilterCount = [
+    selectedQuarters.length > 0,
+    !!selectedOwnerId,
+    !!selectedSegmentId,
+    !!selectedDeliveryTypeId,
+  ].filter(Boolean).length;
+
+  /** Filtr: kvartál + vlastník + segment + dodávka */
   const filteredTasks = tasks.filter((t) => {
     const matchQ = selectedQuarters.length === 0 ||
       selectedQuarters.includes(t.quarterId) ||
       (t.newQuarterId && selectedQuarters.includes(t.newQuarterId));
     const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
-    return matchQ && matchOwner;
+    const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
+    const matchDelivery = !selectedDeliveryTypeId || t.deliveryTypeId === selectedDeliveryTypeId;
+    return matchQ && matchOwner && matchSegment && matchDelivery;
   });
 
   const tasksByStatus = (status: TaskStatus) =>
@@ -168,9 +181,9 @@ export default function AdminBoard() {
         </div>
       </header>
 
-      {/* Filtry: kvartály + vlastník */}
+      {/* Filtry */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-3">
-        {/* Kvartální filtr */}
+        {/* Kvartální filtr – vždy viditelný */}
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs text-muted-foreground font-medium mr-1">Období:</span>
           <Button variant={selectedQuarters.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedQuarters([])}>Vše</Button>
@@ -178,28 +191,57 @@ export default function AdminBoard() {
             <Button key={q.id} variant={selectedQuarters.includes(q.id) ? "default" : "outline"} size="sm" onClick={() => toggleQuarter(q.id)}>{q.label}</Button>
           ))}
         </div>
-        {/* Filtr dle vlastníka */}
-        <div className="flex gap-2 flex-wrap items-center">
-          <span className="text-xs text-muted-foreground font-medium mr-1">Osoba:</span>
-          <Button variant={!selectedOwnerId ? "default" : "outline"} size="sm" onClick={() => setSelectedOwnerId(null)}>Všichni</Button>
-          {members.map((m) => (
-            <Button
-              key={m.id}
-              variant={selectedOwnerId === m.id ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedOwnerId(selectedOwnerId === m.id ? null : m.id)}
-              className="gap-1.5"
-            >
-              <TeamAvatar member={m} size="sm" />
-              {m.initials}
+
+        {/* Collapsible rozšířené filtry */}
+        <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Filter className="w-4 h-4" />
+              Filtrovat
+              {activeFilterCount > 0 && (
+                <span className="ml-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilterCount}</span>
+              )}
             </Button>
-          ))}
-          {selectedOwnerId && (
-            <Button variant="ghost" size="sm" onClick={() => setSelectedOwnerId(null)}>
-              <X className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 mt-3">
+            {/* Filtr dle vlastníka */}
+            <div className="flex gap-2 flex-wrap items-center">
+              <span className="text-xs text-muted-foreground font-medium mr-1">Osoba:</span>
+              <Button variant={!selectedOwnerId ? "default" : "outline"} size="sm" onClick={() => setSelectedOwnerId(null)}>Všichni</Button>
+              {members.map((m) => (
+                <Button key={m.id} variant={selectedOwnerId === m.id ? "default" : "outline"} size="sm" onClick={() => setSelectedOwnerId(selectedOwnerId === m.id ? null : m.id)} className="gap-1.5">
+                  <TeamAvatar member={m} size="sm" />
+                  {m.initials}
+                </Button>
+              ))}
+            </div>
+            {/* Filtr dle segmentu */}
+            {segments.length > 0 && (
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs text-muted-foreground font-medium mr-1">Segment:</span>
+                <Button variant={!selectedSegmentId ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(null)}>Vše</Button>
+                {segments.map((s) => (
+                  <Button key={s.id} variant={selectedSegmentId === s.id ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(selectedSegmentId === s.id ? null : s.id)}>{s.label}</Button>
+                ))}
+              </div>
+            )}
+            {/* Filtr dle druhu dodávky */}
+            {deliveryTypes.length > 0 && (
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs text-muted-foreground font-medium mr-1">Dodávka:</span>
+                <Button variant={!selectedDeliveryTypeId ? "default" : "outline"} size="sm" onClick={() => setSelectedDeliveryTypeId(null)}>Vše</Button>
+                {deliveryTypes.map((d) => (
+                  <Button key={d.id} variant={selectedDeliveryTypeId === d.id ? "default" : "outline"} size="sm" onClick={() => setSelectedDeliveryTypeId(selectedDeliveryTypeId === d.id ? null : d.id)}>{d.label}</Button>
+                ))}
+              </div>
+            )}
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedOwnerId(null); setSelectedSegmentId(null); setSelectedDeliveryTypeId(null); }}>
+                <X className="w-4 h-4 mr-1" /> Zrušit filtry
+              </Button>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* Kanban sloupce */}
