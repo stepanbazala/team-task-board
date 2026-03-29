@@ -1,6 +1,7 @@
 /**
  * Dashboard – prezentační pohled pro vedení
  * Filtr zobrazení sekcí, filtr členů, klikatelné metriky/grafy → overlay s úkoly
+ * Grafy segmentů a dodávek
  */
 
 import { useState, useMemo } from "react";
@@ -29,7 +30,7 @@ const MEMBER_BAR_COLORS = {
   "Hotovo": "hsl(152, 60%, 40%)",
 };
 
-type SectionKey = "counter" | "stats" | "time" | "pieChart" | "quarterChart" | "memberChart" | "taskList";
+type SectionKey = "counter" | "stats" | "time" | "pieChart" | "quarterChart" | "memberChart" | "segmentChart" | "deliveryChart" | "taskList";
 
 const SECTION_LABELS: Record<SectionKey, string> = {
   counter: "Počítadlo dokončených",
@@ -38,6 +39,8 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   pieChart: "Rozložení úkolů (koláč)",
   quarterChart: "Postup dle kvartálů",
   memberChart: "Úkoly dle členů (graf)",
+  segmentChart: "Úkoly dle segmentů",
+  deliveryChart: "Úkoly dle dodávek",
   taskList: "Úkoly dle členů (seznam)",
 };
 
@@ -95,16 +98,17 @@ export default function Dashboard() {
 
   const isVisible = (key: SectionKey) => visibleSections.includes(key);
 
-  /** Filtr: kvartál + členové */
-  const filtered = useMemo(() => {
-    let result = selectedQuarters.length === 0 ? tasks : tasks.filter((t) =>
+  /** Filtr: kvartál (globální), členové se aplikují jen na filtrovaná data */
+  const filteredByQuarter = useMemo(() => {
+    return selectedQuarters.length === 0 ? tasks : tasks.filter((t) =>
       selectedQuarters.includes(t.quarterId) || (t.newQuarterId && selectedQuarters.includes(t.newQuarterId))
     );
-    if (selectedMemberIds.length > 0) {
-      result = result.filter((t) => selectedMemberIds.includes(t.ownerId));
-    }
-    return result;
-  }, [tasks, selectedQuarters, selectedMemberIds]);
+  }, [tasks, selectedQuarters]);
+
+  const filtered = useMemo(() => {
+    if (selectedMemberIds.length === 0) return filteredByQuarter;
+    return filteredByQuarter.filter((t) => selectedMemberIds.includes(t.ownerId));
+  }, [filteredByQuarter, selectedMemberIds]);
 
   const stats = useMemo(() => {
     const todo = filtered.filter((t) => t.status === "todo").length;
@@ -158,6 +162,34 @@ export default function Dashboard() {
     }), [filtered, members]
   );
 
+  /** Segmentový graf */
+  const segmentBarData = useMemo(() =>
+    segments.map((s) => {
+      const sTasks = filtered.filter((t) => t.segmentId === s.id);
+      return {
+        id: s.id,
+        name: s.label,
+        "K řešení": sTasks.filter((t) => t.status === "todo").length,
+        "Probíhá": sTasks.filter((t) => t.status === "in-progress").length,
+        "Hotovo": sTasks.filter((t) => t.status === "done").length,
+      };
+    }), [filtered, segments]
+  );
+
+  /** Dodávkový graf */
+  const deliveryBarData = useMemo(() =>
+    deliveryTypes.map((d) => {
+      const dTasks = filtered.filter((t) => t.deliveryTypeId === d.id);
+      return {
+        id: d.id,
+        name: d.label,
+        "K řešení": dTasks.filter((t) => t.status === "todo").length,
+        "Probíhá": dTasks.filter((t) => t.status === "in-progress").length,
+        "Hotovo": dTasks.filter((t) => t.status === "done").length,
+      };
+    }), [filtered, deliveryTypes]
+  );
+
   const tasksByMember = useMemo(() => {
     const map = new Map<string, Task[]>();
     members.forEach((m) => map.set(m.id, []));
@@ -197,6 +229,19 @@ export default function Dashboard() {
     const status = STATUS_MAP[statusLabel];
     const qLabel = quarters.find((q) => q.id === qId)?.label || "";
     openOverlay(`${qLabel} – ${statusLabel}`, tasks.filter((t) => t.quarterId === qId && t.status === status));
+  };
+
+  /** Klik na category bar chart */
+  const handleCategoryBarClick = (data: any, statusLabel: string, categoryType: string) => {
+    const catId = data?.id;
+    if (!catId) return;
+    const status = STATUS_MAP[statusLabel];
+    const catName = data?.name || "";
+    const catTasks = filtered.filter((t) => {
+      const matchCat = categoryType === "segment" ? t.segmentId === catId : t.deliveryTypeId === catId;
+      return matchCat && t.status === status;
+    });
+    openOverlay(`${catName} – ${statusLabel}`, catTasks);
   };
 
   /** Klik na member bar chart */
@@ -246,7 +291,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Filtry: kvartály + členové */}
+      {/* Filtry: kvartály */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-3">
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs text-muted-foreground font-medium mr-1">Období:</span>
@@ -255,27 +300,12 @@ export default function Dashboard() {
             <Button key={q.id} variant={selectedQuarters.includes(q.id) ? "default" : "outline"} size="sm" onClick={() => toggleQuarter(q.id)}>{q.label}</Button>
           ))}
         </div>
-        <div className="flex gap-2 flex-wrap items-center">
-          <span className="text-xs text-muted-foreground font-medium mr-1">Osoba:</span>
-          <Button variant={selectedMemberIds.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedMemberIds([])}>Všichni</Button>
-          {members.map((m) => (
-            <Button key={m.id} variant={selectedMemberIds.includes(m.id) ? "default" : "outline"} size="sm" onClick={() => toggleMember(m.id)} className="gap-1.5">
-              <TeamAvatar member={m} size="sm" />
-              {m.initials}
-            </Button>
-          ))}
-          {selectedMemberIds.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setSelectedMemberIds([])}>
-              <X className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 space-y-8">
-        {/* Velké počítadlo */}
+        {/* Velké počítadlo – klikatelné */}
         {isVisible("counter") && (
-          <div className="george-card p-8 text-center">
+          <div className="george-card p-8 text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => openOverlay("Celkem dokončeno", filtered.filter((t) => t.status === "done"))}>
             <p className="text-sm text-muted-foreground mb-1">Celkem dokončeno</p>
             <p className="text-6xl font-bold text-primary">{stats.done}</p>
             <p className="text-lg text-muted-foreground mt-1">z {stats.total} úkolů ({stats.completionRate}%)</p>
@@ -342,6 +372,49 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Grafy segmentů a dodávek */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Segmenty */}
+          {isVisible("segmentChart") && segments.length > 0 && (
+            <div className="george-card p-6">
+              <h3 className="font-semibold mb-4">Úkoly dle segmentů</h3>
+              <p className="text-xs text-muted-foreground mb-3">Klikněte na sloupec pro zobrazení úkolů</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={segmentBarData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
+                  <XAxis dataKey="name" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="K řešení" fill={MEMBER_BAR_COLORS["K řešení"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleCategoryBarClick(data, "K řešení", "segment")} />
+                  <Bar dataKey="Probíhá" fill={MEMBER_BAR_COLORS["Probíhá"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleCategoryBarClick(data, "Probíhá", "segment")} />
+                  <Bar dataKey="Hotovo" fill={MEMBER_BAR_COLORS["Hotovo"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleCategoryBarClick(data, "Hotovo", "segment")} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Dodávky */}
+          {isVisible("deliveryChart") && deliveryTypes.length > 0 && (
+            <div className="george-card p-6">
+              <h3 className="font-semibold mb-4">Úkoly dle dodávek</h3>
+              <p className="text-xs text-muted-foreground mb-3">Klikněte na sloupec pro zobrazení úkolů</p>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={deliveryBarData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
+                  <XAxis dataKey="name" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="K řešení" fill={MEMBER_BAR_COLORS["K řešení"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleCategoryBarClick(data, "K řešení", "delivery")} />
+                  <Bar dataKey="Probíhá" fill={MEMBER_BAR_COLORS["Probíhá"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleCategoryBarClick(data, "Probíhá", "delivery")} />
+                  <Bar dataKey="Hotovo" fill={MEMBER_BAR_COLORS["Hotovo"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleCategoryBarClick(data, "Hotovo", "delivery")} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
         {/* Graf – úkoly dle lidí s tlačítky pro výběr členů */}
         {isVisible("memberChart") && (
           <div className="george-card p-6">
@@ -386,7 +459,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Tabulka úkolů dle členů */}
+        {/* Tabulka úkolů dle členů – s vlastním filtrem členů */}
         {isVisible("taskList") && (
           <div className="george-card overflow-hidden">
             <div className="p-6 border-b border-border">
@@ -395,9 +468,19 @@ export default function Dashboard() {
                   <h3 className="font-semibold text-lg">Úkoly dle členů týmu</h3>
                   <p className="text-sm text-muted-foreground mt-1">Klikněte na úkol pro zobrazení detailu</p>
                 </div>
+              </div>
+              {/* Filtr členů přímo v sekci */}
+              <div className="flex gap-2 flex-wrap mt-3">
+                <Button variant={selectedMemberIds.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedMemberIds([])}>Všichni</Button>
+                {members.map((m) => (
+                  <Button key={m.id} variant={selectedMemberIds.includes(m.id) ? "default" : "outline"} size="sm" onClick={() => toggleMember(m.id)} className="gap-1.5">
+                    <TeamAvatar member={m} size="sm" />
+                    {m.initials}
+                  </Button>
+                ))}
                 {selectedMemberIds.length > 0 && (
                   <Button variant="ghost" size="sm" onClick={() => setSelectedMemberIds([])}>
-                    <X className="w-4 h-4 mr-1" /> Zobrazit vše
+                    <X className="w-4 h-4" />
                   </Button>
                 )}
               </div>
@@ -409,10 +492,7 @@ export default function Dashboard() {
 
               return (
                 <div key={member.id} className="border-b border-border last:border-b-0">
-                  <div
-                    className="flex items-center gap-3 px-6 py-4 bg-secondary/30 cursor-pointer hover:bg-secondary/50 transition-colors"
-                    onClick={() => toggleMember(member.id)}
-                  >
+                  <div className="flex items-center gap-3 px-6 py-4 bg-secondary/30">
                     <TeamAvatar member={member} size="md" />
                     <div>
                       <span className="font-semibold">{member.name}</span>
