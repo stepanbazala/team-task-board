@@ -116,10 +116,10 @@ export default function AdminBoard() {
     setFormOpen(true);
   };
 
-  /** Duplikace: pokud je vybraný kvartál filtr, zduplikovaný úkol dostane ten kvartál */
+  /** Duplikace: pokud je vybraný kvartál filtr, zduplikovaný úkol dostane ten kvartál; vždy zůstane viditelný */
   const handleDuplicate = (task: Task) => {
     const targetQuarterId = selectedQuarters.length === 1 ? selectedQuarters[0] : task.quarterId;
-    createTask({
+    const newTask = createTask({
       title: `${task.title} (kopie)`,
       description: task.description,
       status: "todo",
@@ -135,6 +135,10 @@ export default function AdminBoard() {
       deliveryTypeId: task.deliveryTypeId,
     });
     refresh();
+    // Pokud duplikovaný úkol není vidět v aktuálním filtru, přepni na "Vše"
+    if (selectedQuarters.length > 0 && !selectedQuarters.includes(targetQuarterId)) {
+      setSelectedQuarters([]);
+    }
     toast.success("Úkol byl duplikován");
   };
 
