@@ -34,7 +34,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
 
   return (
     <div
-      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-[4px] border-dashed border-destructive bg-destructive/5" : ""}`}
+      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-[5px] border-dashed border-destructive bg-destructive/10 shadow-[0_0_12px_-2px_hsl(var(--destructive)/0.35)]" : ""}`}
       onClick={() => onClick(task)}
     >
       {/* Horní řádek: dodání + stav */}
