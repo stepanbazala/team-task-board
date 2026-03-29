@@ -4,12 +4,11 @@
  */
 
 import { useState } from "react";
-import { Task, TeamMember, QuarterDef } from "@/types/task";
+import { Task, TeamMember, QuarterDef, CategoryDef } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
-import { ImageLightbox } from "@/components/ImageLightbox";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 
@@ -20,9 +19,11 @@ interface TaskListOverlayProps {
   tasks: Task[];
   members: TeamMember[];
   quarters: QuarterDef[];
+  segments?: CategoryDef[];
+  deliveryTypes?: CategoryDef[];
 }
 
-export function TaskListOverlay({ open, onOpenChange, title, tasks, members, quarters }: TaskListOverlayProps) {
+export function TaskListOverlay({ open, onOpenChange, title, tasks, members, quarters, segments = [], deliveryTypes = [] }: TaskListOverlayProps) {
   const [detailTask, setDetailTask] = useState<Task | null>(null);
 
   const findMember = (id: string) => members.find((m) => m.id === id);
@@ -72,6 +73,8 @@ export function TaskListOverlay({ open, onOpenChange, title, tasks, members, qua
         owner={detailTask ? findMember(detailTask.ownerId) : undefined}
         participants={detailTask?.participantIds.map((id) => findMember(id)).filter(Boolean) as any}
         quarters={quarters}
+        segments={segments}
+        deliveryTypes={deliveryTypes}
       />
     </>
   );
