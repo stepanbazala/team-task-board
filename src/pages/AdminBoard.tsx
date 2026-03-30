@@ -67,7 +67,7 @@ export default function AdminBoard() {
     !!selectedDeliveryTypeId,
   ].filter(Boolean).length;
 
-  /** Filtr: kvartál + vlastník + segment + dodávka */
+  /** Filtr: kvartál + vlastník + segment + dodávka + vyhledávání */
   const filteredTasks = tasks.filter((t) => {
     const matchQ = selectedQuarters.length === 0 ||
       selectedQuarters.includes(t.quarterId) ||
@@ -75,7 +75,10 @@ export default function AdminBoard() {
     const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
     const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
     const matchDelivery = !selectedDeliveryTypeId || t.deliveryTypeId === selectedDeliveryTypeId;
-    return matchQ && matchOwner && matchSegment && matchDelivery;
+    const matchSearch = !searchQuery.trim() || 
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchQ && matchOwner && matchSegment && matchDelivery && matchSearch;
   });
 
   const tasksByStatus = (status: TaskStatus) =>
