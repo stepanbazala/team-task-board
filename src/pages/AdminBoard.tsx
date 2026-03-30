@@ -188,6 +188,17 @@ export default function AdminBoard() {
 
       {/* Filtry */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-3">
+        {/* Vyhledávání */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Hledat úkoly..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
         {/* Kvartální filtr – vždy viditelný */}
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs text-muted-foreground font-medium mr-1">Období:</span>
