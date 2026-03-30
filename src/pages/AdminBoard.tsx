@@ -12,7 +12,8 @@ import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { Button } from "@/components/ui/button";
-import { Plus, LayoutDashboard, Settings, X, Filter } from "lucide-react";
+import { Plus, LayoutDashboard, Settings, X, Filter, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ export default function AdminBoard() {
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedDeliveryTypeId, setSelectedDeliveryTypeId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -65,7 +67,7 @@ export default function AdminBoard() {
     !!selectedDeliveryTypeId,
   ].filter(Boolean).length;
 
-  /** Filtr: kvartál + vlastník + segment + dodávka */
+  /** Filtr: kvartál + vlastník + segment + dodávka + vyhledávání */
   const filteredTasks = tasks.filter((t) => {
     const matchQ = selectedQuarters.length === 0 ||
       selectedQuarters.includes(t.quarterId) ||
@@ -73,7 +75,10 @@ export default function AdminBoard() {
     const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
     const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
     const matchDelivery = !selectedDeliveryTypeId || t.deliveryTypeId === selectedDeliveryTypeId;
-    return matchQ && matchOwner && matchSegment && matchDelivery;
+    const matchSearch = !searchQuery.trim() || 
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchQ && matchOwner && matchSegment && matchDelivery && matchSearch;
   });
 
   const tasksByStatus = (status: TaskStatus) =>
@@ -183,6 +188,17 @@ export default function AdminBoard() {
 
       {/* Filtry */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-3">
+        {/* Vyhledávání */}
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Hledat úkoly..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
         {/* Kvartální filtr – vždy viditelný */}
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs text-muted-foreground font-medium mr-1">Období:</span>

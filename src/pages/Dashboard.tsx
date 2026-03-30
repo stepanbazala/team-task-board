@@ -1,10 +1,10 @@
 /**
  * Dashboard – prezentační pohled pro vedení
- * Filtr zobrazení sekcí, filtr členů, klikatelné metriky/grafy → overlay s úkoly
- * Grafy segmentů a dodávek
+ * Top-level filtry (stejné jako správa), filtr zobrazení sekcí, PDF export
+ * Klikatelné metriky/grafy → overlay s úkoly
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Task, STATUS_LABELS, TaskStatus, QuarterDef, CategoryDef } from "@/types/task";
 import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes } from "@/services/storage";
 import { TeamAvatar } from "@/components/TeamAvatar";
@@ -12,7 +12,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { TaskListOverlay } from "@/components/TaskListOverlay";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CheckCircle2, Clock, ListTodo, TrendingUp, Timer, Zap, Hourglass, RotateCcw, Eye, X } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ArrowLeft, CheckCircle2, Clock, ListTodo, TrendingUp, Timer, Zap, Hourglass, RotateCcw, Eye, X, Filter, FileDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format, differenceInDays } from "date-fns";
 import { cs } from "date-fns/locale";
@@ -22,6 +23,8 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 const PIE_COLORS = ["hsl(214, 80%, 40%)", "hsl(36, 95%, 50%)", "hsl(152, 60%, 40%)"];
 const MEMBER_BAR_COLORS = {
@@ -63,17 +66,24 @@ function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const contentRef = useRef<HTMLDivElement>(null);
   const [tasks] = useState<Task[]>(getTasks);
   const [members] = useState(getMembers);
   const [quarters] = useState<QuarterDef[]>(getQuarters);
   const [segments] = useState<CategoryDef[]>(getSegments);
   const [deliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
-  const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [visibleSections, setVisibleSections] = useState<SectionKey[]>(ALL_SECTIONS);
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
 
-  // Overlay state for drill-down
+  /* Filtry – stejné jako ve správě */
+  const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedDeliveryTypeId, setSelectedDeliveryTypeId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  /* Overlay pro drill-down */
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [overlayTitle, setOverlayTitle] = useState("");
   const [overlayTasks, setOverlayTasks] = useState<Task[]>([]);
@@ -90,25 +100,27 @@ export default function Dashboard() {
     );
   };
 
-  const toggleMember = (mId: string) => {
-    setSelectedMemberIds((prev) =>
-      prev.includes(mId) ? prev.filter((id) => id !== mId) : [...prev, mId]
-    );
-  };
-
   const isVisible = (key: SectionKey) => visibleSections.includes(key);
 
-  /** Filtr: kvartál (globální), členové se aplikují jen na filtrovaná data */
-  const filteredByQuarter = useMemo(() => {
-    return selectedQuarters.length === 0 ? tasks : tasks.filter((t) =>
-      selectedQuarters.includes(t.quarterId) || (t.newQuarterId && selectedQuarters.includes(t.newQuarterId))
-    );
-  }, [tasks, selectedQuarters]);
+  const activeFilterCount = [
+    selectedQuarters.length > 0,
+    !!selectedOwnerId,
+    !!selectedSegmentId,
+    !!selectedDeliveryTypeId,
+  ].filter(Boolean).length;
 
+  /** Filtrování dat */
   const filtered = useMemo(() => {
-    if (selectedMemberIds.length === 0) return filteredByQuarter;
-    return filteredByQuarter.filter((t) => selectedMemberIds.includes(t.ownerId));
-  }, [filteredByQuarter, selectedMemberIds]);
+    return tasks.filter((t) => {
+      const matchQ = selectedQuarters.length === 0 ||
+        selectedQuarters.includes(t.quarterId) ||
+        (t.newQuarterId && selectedQuarters.includes(t.newQuarterId));
+      const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
+      const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
+      const matchDelivery = !selectedDeliveryTypeId || t.deliveryTypeId === selectedDeliveryTypeId;
+      return matchQ && matchOwner && matchSegment && matchDelivery;
+    });
+  }, [tasks, selectedQuarters, selectedOwnerId, selectedSegmentId, selectedDeliveryTypeId]);
 
   const stats = useMemo(() => {
     const todo = filtered.filter((t) => t.status === "todo").length;
@@ -139,8 +151,7 @@ export default function Dashboard() {
     quarters.map((q) => {
       const qTasks = tasks.filter((t) => t.quarterId === q.id);
       return {
-        name: q.label,
-        id: q.id,
+        name: q.label, id: q.id,
         "K řešení": qTasks.filter((t) => t.status === "todo").length,
         "Probíhá": qTasks.filter((t) => t.status === "in-progress").length,
         "Hotovo": qTasks.filter((t) => t.status === "done").length,
@@ -152,9 +163,7 @@ export default function Dashboard() {
     members.map((m) => {
       const mTasks = filtered.filter((t) => t.ownerId === m.id);
       return {
-        id: m.id,
-        name: m.initials,
-        fullName: m.name,
+        id: m.id, name: m.initials, fullName: m.name,
         "K řešení": mTasks.filter((t) => t.status === "todo").length,
         "Probíhá": mTasks.filter((t) => t.status === "in-progress").length,
         "Hotovo": mTasks.filter((t) => t.status === "done").length,
@@ -162,13 +171,11 @@ export default function Dashboard() {
     }), [filtered, members]
   );
 
-  /** Segmentový graf */
   const segmentBarData = useMemo(() =>
     segments.map((s) => {
       const sTasks = filtered.filter((t) => t.segmentId === s.id);
       return {
-        id: s.id,
-        name: s.label,
+        id: s.id, name: s.label,
         "K řešení": sTasks.filter((t) => t.status === "todo").length,
         "Probíhá": sTasks.filter((t) => t.status === "in-progress").length,
         "Hotovo": sTasks.filter((t) => t.status === "done").length,
@@ -176,13 +183,11 @@ export default function Dashboard() {
     }), [filtered, segments]
   );
 
-  /** Dodávkový graf */
   const deliveryBarData = useMemo(() =>
     deliveryTypes.map((d) => {
       const dTasks = filtered.filter((t) => t.deliveryTypeId === d.id);
       return {
-        id: d.id,
-        name: d.label,
+        id: d.id, name: d.label,
         "K řešení": dTasks.filter((t) => t.status === "todo").length,
         "Probíhá": dTasks.filter((t) => t.status === "in-progress").length,
         "Hotovo": dTasks.filter((t) => t.status === "done").length,
@@ -203,26 +208,22 @@ export default function Dashboard() {
   const findMember = (id: string) => members.find((m) => m.id === id);
   const sortedQuarters = sortQuarters(quarters);
 
-  /** Otevře overlay s vyfiltrovanými úkoly */
   const openOverlay = (title: string, tasks: Task[]) => {
     setOverlayTitle(title);
     setOverlayTasks(tasks);
     setOverlayOpen(true);
   };
 
-  /** Klik na statistickou kartu */
   const handleStatClick = (status: TaskStatus, label: string) => {
     openOverlay(label, filtered.filter((t) => t.status === status));
   };
 
-  /** Klik na koláčový graf */
   const handlePieClick = (_: any, index: number) => {
     const statusKeys: TaskStatus[] = ["todo", "in-progress", "done"];
     const status = statusKeys[index];
     openOverlay(STATUS_LABELS[status], filtered.filter((t) => t.status === status));
   };
 
-  /** Klik na sloupcový graf kvartálů */
   const handleQuarterBarClick = (data: any, statusLabel: string) => {
     const qId = data?.id;
     if (!qId) return;
@@ -231,7 +232,6 @@ export default function Dashboard() {
     openOverlay(`${qLabel} – ${statusLabel}`, tasks.filter((t) => t.quarterId === qId && t.status === status));
   };
 
-  /** Klik na category bar chart */
   const handleCategoryBarClick = (data: any, statusLabel: string, categoryType: string) => {
     const catId = data?.id;
     if (!catId) return;
@@ -244,16 +244,38 @@ export default function Dashboard() {
     openOverlay(`${catName} – ${statusLabel}`, catTasks);
   };
 
-  /** Klik na member bar chart */
-  const handleMemberBarClick = (data: any) => {
-    if (!data?.id) return;
-    toggleMember(data.id);
+  const handleMemberBarClick = (data: any, statusLabel: string) => {
+    const mId = data?.id;
+    if (!mId) return;
+    const status = STATUS_MAP[statusLabel];
+    const member = findMember(mId);
+    openOverlay(`${member?.name || mId} – ${statusLabel}`, filtered.filter((t) => t.ownerId === mId && t.status === status));
   };
 
-  /** Filtr členů pro zobrazení v seznamu */
-  const displayMembers = selectedMemberIds.length > 0
-    ? members.filter((m) => selectedMemberIds.includes(m.id))
-    : members;
+  /** Export do PDF */
+  const handleExportPDF = async () => {
+    if (!contentRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(contentRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f5f6f8",
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? "landscape" : "portrait",
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      pdf.save(`dashboard-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    } catch (err) {
+      console.error("PDF export error:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -264,7 +286,10 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Přehled pro vedení</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportPDF} disabled={exporting}>
+              <FileDown className="w-4 h-4 mr-1" /> {exporting ? "Exportuji..." : "Export PDF"}
+            </Button>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -283,16 +308,16 @@ export default function Dashboard() {
                 </div>
               </PopoverContent>
             </Popover>
-
-            <Button variant="outline" onClick={() => navigate("/")}>
-              <ArrowLeft className="w-4 h-4 mr-2" /> Správa
+            <Button variant="outline" size="sm" onClick={() => navigate("/")}>
+              <ArrowLeft className="w-4 h-4 mr-1" /> Správa
             </Button>
           </div>
         </div>
       </header>
 
-      {/* Filtry: kvartály */}
+      {/* Filtry – stejné jako ve správě */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-3">
+        {/* Kvartální filtr */}
         <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs text-muted-foreground font-medium mr-1">Období:</span>
           <Button variant={selectedQuarters.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedQuarters([])}>Vše</Button>
@@ -300,10 +325,62 @@ export default function Dashboard() {
             <Button key={q.id} variant={selectedQuarters.includes(q.id) ? "default" : "outline"} size="sm" onClick={() => toggleQuarter(q.id)}>{q.label}</Button>
           ))}
         </div>
+
+        {/* Collapsible rozšířené filtry */}
+        <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Filter className="w-4 h-4" />
+              Filtrovat
+              {activeFilterCount > 0 && (
+                <span className="ml-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">{activeFilterCount}</span>
+              )}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-3 mt-3">
+            {/* Osoba */}
+            <div className="flex gap-2 flex-wrap items-center">
+              <span className="text-xs text-muted-foreground font-medium mr-1">Osoba:</span>
+              <Button variant={!selectedOwnerId ? "default" : "outline"} size="sm" onClick={() => setSelectedOwnerId(null)}>Všichni</Button>
+              {members.map((m) => (
+                <Button key={m.id} variant={selectedOwnerId === m.id ? "default" : "outline"} size="sm" onClick={() => setSelectedOwnerId(selectedOwnerId === m.id ? null : m.id)} className="gap-1.5">
+                  <TeamAvatar member={m} size="sm" />
+                  {m.initials}
+                </Button>
+              ))}
+            </div>
+            {/* Segment */}
+            {segments.length > 0 && (
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs text-muted-foreground font-medium mr-1">Segment:</span>
+                <Button variant={!selectedSegmentId ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(null)}>Vše</Button>
+                {segments.map((s) => (
+                  <Button key={s.id} variant={selectedSegmentId === s.id ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(selectedSegmentId === s.id ? null : s.id)}>{s.label}</Button>
+                ))}
+              </div>
+            )}
+            {/* Dodávka */}
+            {deliveryTypes.length > 0 && (
+              <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-xs text-muted-foreground font-medium mr-1">Dodávka:</span>
+                <Button variant={!selectedDeliveryTypeId ? "default" : "outline"} size="sm" onClick={() => setSelectedDeliveryTypeId(null)}>Vše</Button>
+                {deliveryTypes.map((d) => (
+                  <Button key={d.id} variant={selectedDeliveryTypeId === d.id ? "default" : "outline"} size="sm" onClick={() => setSelectedDeliveryTypeId(selectedDeliveryTypeId === d.id ? null : d.id)}>{d.label}</Button>
+                ))}
+              </div>
+            )}
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedOwnerId(null); setSelectedSegmentId(null); setSelectedDeliveryTypeId(null); }}>
+                <X className="w-4 h-4 mr-1" /> Zrušit filtry
+              </Button>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 space-y-8">
-        {/* Velké počítadlo – klikatelné */}
+      {/* Obsah dashboardu – ref pro PDF export */}
+      <div ref={contentRef} className="max-w-7xl mx-auto px-4 sm:px-6 py-2 space-y-8 pb-8">
+        {/* Velké počítadlo */}
         {isVisible("counter") && (
           <div className="george-card p-8 text-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => openOverlay("Celkem dokončeno", filtered.filter((t) => t.status === "done"))}>
             <p className="text-sm text-muted-foreground mb-1">Celkem dokončeno</p>
@@ -312,7 +389,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Statistické karty – klikatelné */}
+        {/* Statistické karty */}
         {isVisible("stats") && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard icon={<ListTodo className="w-5 h-5" />} label="K řešení" value={stats.todo} color="text-primary" onClick={() => handleStatClick("todo", "K řešení")} />
@@ -322,7 +399,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Časové statistiky – klikatelné */}
+        {/* Časové statistiky */}
         {isVisible("time") && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard icon={<Timer className="w-5 h-5" />} label="Ø doba zpracování" value={`${timeStats.avg} dní`} color="text-primary" onClick={() => openOverlay("Dokončené úkoly", timeStats.doneTasks)} />
@@ -334,7 +411,6 @@ export default function Dashboard() {
 
         {/* Grafy */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Koláčový graf – klikatelný */}
           {isVisible("pieChart") && (
             <div className="george-card p-6">
               <h3 className="font-semibold mb-4">Rozložení úkolů</h3>
@@ -351,7 +427,6 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Sloupcový graf kvartálů – klikatelný */}
           {isVisible("quarterChart") && (
             <div className="george-card p-6">
               <h3 className="font-semibold mb-4">Postup dle kvartálů</h3>
@@ -372,13 +447,11 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Grafy segmentů a dodávek */}
+        {/* Segmenty a dodávky */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Segmenty */}
           {isVisible("segmentChart") && segments.length > 0 && (
             <div className="george-card p-6">
               <h3 className="font-semibold mb-4">Úkoly dle segmentů</h3>
-              <p className="text-xs text-muted-foreground mb-3">Klikněte na sloupec pro zobrazení úkolů</p>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={segmentBarData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
@@ -394,11 +467,9 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Dodávky */}
           {isVisible("deliveryChart") && deliveryTypes.length > 0 && (
             <div className="george-card p-6">
               <h3 className="font-semibold mb-4">Úkoly dle dodávek</h3>
-              <p className="text-xs text-muted-foreground mb-3">Klikněte na sloupec pro zobrazení úkolů</p>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={deliveryBarData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
@@ -415,32 +486,11 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Graf – úkoly dle lidí s tlačítky pro výběr členů */}
+        {/* Členové týmu – graf */}
         {isVisible("memberChart") && (
           <div className="george-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Úkoly dle členů týmu</h3>
-              {selectedMemberIds.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setSelectedMemberIds([])}>
-                  <X className="w-4 h-4 mr-1" /> Zrušit filtr
-                </Button>
-              )}
-            </div>
-            {/* Tlačítka pro výběr členů */}
-            <div className="flex gap-2 flex-wrap mb-4">
-              {members.map((m) => (
-                <Button
-                  key={m.id}
-                  variant={selectedMemberIds.includes(m.id) ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => toggleMember(m.id)}
-                  className="gap-1.5"
-                >
-                  <TeamAvatar member={m} size="sm" />
-                  {m.initials}
-                </Button>
-              ))}
-            </div>
+            <h3 className="font-semibold mb-4">Úkoly dle členů týmu</h3>
+            <p className="text-xs text-muted-foreground mb-3">Klikněte na sloupec pro zobrazení úkolů</p>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={memberBarData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 20%, 90%)" />
@@ -451,42 +501,23 @@ export default function Dashboard() {
                   return item?.fullName || label;
                 }} />
                 <Legend />
-                <Bar dataKey="K řešení" fill={MEMBER_BAR_COLORS["K řešení"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleMemberBarClick} />
-                <Bar dataKey="Probíhá" fill={MEMBER_BAR_COLORS["Probíhá"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleMemberBarClick} />
-                <Bar dataKey="Hotovo" fill={MEMBER_BAR_COLORS["Hotovo"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleMemberBarClick} />
+                <Bar dataKey="K řešení" fill={MEMBER_BAR_COLORS["K řešení"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleMemberBarClick(data, "K řešení")} />
+                <Bar dataKey="Probíhá" fill={MEMBER_BAR_COLORS["Probíhá"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleMemberBarClick(data, "Probíhá")} />
+                <Bar dataKey="Hotovo" fill={MEMBER_BAR_COLORS["Hotovo"]} radius={[4, 4, 0, 0]} cursor="pointer" onClick={(data: any) => handleMemberBarClick(data, "Hotovo")} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        {/* Tabulka úkolů dle členů – s vlastním filtrem členů */}
+        {/* Seznam úkolů dle členů */}
         {isVisible("taskList") && (
           <div className="george-card overflow-hidden">
             <div className="p-6 border-b border-border">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold text-lg">Úkoly dle členů týmu</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Klikněte na úkol pro zobrazení detailu</p>
-                </div>
-              </div>
-              {/* Filtr členů přímo v sekci */}
-              <div className="flex gap-2 flex-wrap mt-3">
-                <Button variant={selectedMemberIds.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedMemberIds([])}>Všichni</Button>
-                {members.map((m) => (
-                  <Button key={m.id} variant={selectedMemberIds.includes(m.id) ? "default" : "outline"} size="sm" onClick={() => toggleMember(m.id)} className="gap-1.5">
-                    <TeamAvatar member={m} size="sm" />
-                    {m.initials}
-                  </Button>
-                ))}
-                {selectedMemberIds.length > 0 && (
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedMemberIds([])}>
-                    <X className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
+              <h3 className="font-semibold text-lg">Úkoly dle členů týmu</h3>
+              <p className="text-sm text-muted-foreground mt-1">Klikněte na úkol pro zobrazení detailu</p>
             </div>
 
-            {displayMembers.map((member) => {
+            {members.map((member) => {
               const memberTasks = tasksByMember.get(member.id) || [];
               if (memberTasks.length === 0 && selectedQuarters.length > 0) return null;
 
