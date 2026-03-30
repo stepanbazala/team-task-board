@@ -34,8 +34,8 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
 
   return (
     <div
-      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-[6px] border-dashed border-destructive bg-destructive/15 shadow-[0_0_24px_-4px_hsl(var(--destructive)/0.6)] ring-2 ring-destructive/30 relative overflow-hidden" : ""}`}
-      onClick={() => onClick(task)}
+      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-[6px] border-dashed border-destructive bg-destructive/25 shadow-[0_0_30px_0px_hsl(var(--destructive)/0.45)] ring-4 ring-destructive/40 relative" : ""}`}
+      style={isRescheduled ? { background: 'linear-gradient(135deg, hsl(0 80% 95%), hsl(0 70% 92%))' } : undefined}
     >
       {/* Horní řádek: dodání + stav */}
       <div className="flex items-center justify-between mb-3">
