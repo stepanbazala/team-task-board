@@ -45,6 +45,7 @@ export default function AdminBoard() {
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [selectedDeliveryTypeId, setSelectedDeliveryTypeId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
