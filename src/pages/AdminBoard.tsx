@@ -179,6 +179,9 @@ export default function AdminBoard() {
             <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
               <LayoutDashboard className="w-4 h-4 mr-1" /> Dashboard
             </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/board")}>
+              <LayoutDashboard className="w-4 h-4 mr-1" /> Tabule
+            </Button>
             <Button size="sm" onClick={handleNew}>
               <Plus className="w-4 h-4 mr-1" /> Nový úkol
             </Button>
