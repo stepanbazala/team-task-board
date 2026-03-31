@@ -7,6 +7,7 @@ import { Task, TeamMember, QuarterDef, CategoryDef } from "@/types/task";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { Badge } from "@/components/ui/badge";
 import { Calendar, Pencil, Trash2, AlertTriangle, Copy } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
@@ -31,12 +32,30 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
   const segmentLabel = task.segmentId ? segments.find((s) => s.id === task.segmentId)?.label : undefined;
   const deliveryLabel = task.deliveryTypeId ? deliveryTypes.find((d) => d.id === task.deliveryTypeId)?.label : undefined;
   const images = task.imageUrls || (task.imageUrl ? [task.imageUrl] : []);
+  const rescheduledCardClass = isRescheduled
+    ? "border-[8px] border-dashed border-destructive bg-destructive/20 shadow-[0_0_0_4px_hsl(var(--destructive)/0.18),0_18px_45px_-18px_hsl(var(--destructive)/0.75)] ring-4 ring-destructive/35 relative overflow-hidden"
+    : "";
 
   return (
     <div
-      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${isRescheduled ? "border-[6px] border-dashed border-destructive bg-destructive/25 shadow-[0_0_30px_0px_hsl(var(--destructive)/0.45)] ring-4 ring-destructive/40 relative" : ""}`}
-      style={isRescheduled ? { background: 'linear-gradient(135deg, hsl(0 80% 95%), hsl(0 70% 92%))' } : undefined}
+      className={`george-card-hover p-4 cursor-pointer animate-fade-in ${rescheduledCardClass}`}
+      style={isRescheduled ? { background: "linear-gradient(135deg, hsl(var(--destructive) / 0.18), hsl(var(--card)) 48%, hsl(var(--destructive) / 0.12))" } : undefined}
+      onClick={() => onClick(task)}
     >
+      {isRescheduled && (
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <Badge variant="destructive" className="px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] shadow-sm">
+            <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+            Zpožděno
+          </Badge>
+          {newQuarterLabel && (
+            <span className="text-xs font-semibold text-destructive">
+              Nově: {newQuarterLabel}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Horní řádek: dodání + stav */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
