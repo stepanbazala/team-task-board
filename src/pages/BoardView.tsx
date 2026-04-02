@@ -6,7 +6,8 @@
 
 import { useState, useMemo, useCallback, DragEvent } from "react";
 import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, TeamMember } from "@/types/task";
-import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask } from "@/services/storage";
+import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask, createTask, deleteTask } from "@/services/storage";
+import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
