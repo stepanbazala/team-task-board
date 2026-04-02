@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { Calendar, User, Users, AlertTriangle, Play, ArrowRight } from "lucide-react";
+import { Calendar, User, Users, AlertTriangle, Play, ArrowRight, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 
