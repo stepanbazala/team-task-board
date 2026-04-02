@@ -13,7 +13,7 @@ import { TeamAvatar } from "@/components/TeamAvatar";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Filter, X, Search, LayoutDashboard, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Filter, X, Search, LayoutDashboard, AlertTriangle, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
