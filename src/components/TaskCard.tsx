@@ -53,7 +53,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
           {newQuarterLabel && (
-            <span className="text-xs font-semibold text-destructive">→ {newQuarterLabel}</span>
+            <span className="text-xs font-semibold text-warning">→ {newQuarterLabel}</span>
           )}
         </div>
         <StatusBadge status={task.status} />
