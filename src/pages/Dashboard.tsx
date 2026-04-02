@@ -13,7 +13,7 @@ import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { TaskListOverlay } from "@/components/TaskListOverlay";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, CheckCircle2, Clock, ListTodo, TrendingUp, Timer, Zap, Hourglass, RotateCcw, Eye, X, Filter, FileDown } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, ListTodo, TrendingUp, Timer, Zap, Hourglass, RotateCcw, Eye, X, Filter, FileDown, LayoutDashboard } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format, differenceInDays } from "date-fns";
 import { cs } from "date-fns/locale";
@@ -310,6 +310,9 @@ export default function Dashboard() {
             </Popover>
             <Button variant="outline" size="sm" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Správa
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/board")}>
+              <LayoutDashboard className="w-4 h-4 mr-1" /> Tabule
             </Button>
           </div>
         </div>
