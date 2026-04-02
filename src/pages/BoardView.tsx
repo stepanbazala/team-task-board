@@ -44,7 +44,12 @@ export default function BoardView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  const refresh = useCallback(() => {
+    setTasks(getTasks());
+  }, []);
   const sortedQuarters = sortQuarters(quarters);
 
   const activeFilterCount = [
