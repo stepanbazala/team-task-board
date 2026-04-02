@@ -41,7 +41,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
   return (
     <div
       className={`george-card-hover p-4 cursor-pointer animate-fade-in ${rescheduledCardClass}`}
-      style={highlightDelayedTask ? { background: "linear-gradient(135deg, hsl(var(--destructive) / 0.22), hsl(var(--card)) 46%, hsl(var(--muted) / 0.85))" } : undefined}
+      style={highlightDelayedTask ? { background: "linear-gradient(135deg, hsl(var(--warning) / 0.22), hsl(var(--card)) 46%, hsl(var(--muted) / 0.85))" } : undefined}
       onClick={() => onClick(task)}
     >
       {highlightDelayedTask && (
