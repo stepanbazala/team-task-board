@@ -311,6 +311,9 @@ export default function Dashboard() {
             <Button variant="outline" size="sm" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Správa
             </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate("/board")}>
+              <LayoutDashboard className="w-4 h-4 mr-1" /> Tabule
+            </Button>
           </div>
         </div>
       </header>
