@@ -392,6 +392,29 @@ export default function BoardView() {
         quarters={quarters}
         segments={segments}
         deliveryTypes={deliveryTypes}
+        onEdit={(task: Task) => { setDetailTask(null); setEditingTask(task); setFormOpen(true); }}
+      />
+
+      {/* Form dialog */}
+      <TaskFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        task={editingTask}
+        members={members}
+        quarters={quarters}
+        segments={segments}
+        deliveryTypes={deliveryTypes}
+        onSave={(data) => {
+          if (editingTask) {
+            updateTask(editingTask.id, data);
+            toast.success("Úkol byl upraven");
+          } else {
+            createTask(data);
+            toast.success("Úkol byl vytvořen");
+          }
+          setEditingTask(null);
+          refresh();
+        }}
       />
     </div>
   );
