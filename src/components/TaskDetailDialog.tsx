@@ -48,6 +48,11 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
             <StatusBadge status={task.status} />
           </div>
           <DialogTitle className="text-xl leading-snug">{task.title}</DialogTitle>
+          {onEdit && (
+            <Button variant="outline" size="sm" className="mt-2 w-fit" onClick={() => onEdit(task)}>
+              <Pencil className="w-3.5 h-3.5 mr-1" /> Upravit
+            </Button>
+          )}
         </DialogHeader>
 
         <div className="space-y-5">
