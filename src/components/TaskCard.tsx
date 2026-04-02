@@ -35,17 +35,17 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
   const hasDelay = Boolean(task.delayReason || task.newQuarterId);
   const highlightDelayedTask = isRescheduled || hasDelay;
   const rescheduledCardClass = highlightDelayedTask
-    ? "border-[8px] border-dashed border-destructive bg-destructive/20 shadow-[0_0_0_4px_hsl(var(--destructive)/0.18),0_18px_45px_-18px_hsl(var(--destructive)/0.75)] ring-4 ring-destructive/35 relative overflow-hidden"
+    ? "border-[8px] border-dashed border-warning bg-warning/20 shadow-[0_0_0_4px_hsl(var(--warning)/0.18),0_18px_45px_-18px_hsl(var(--warning)/0.75)] ring-4 ring-warning/35 relative overflow-hidden"
     : "";
 
   return (
     <div
       className={`george-card-hover p-4 cursor-pointer animate-fade-in ${rescheduledCardClass}`}
-      style={highlightDelayedTask ? { background: "linear-gradient(135deg, hsl(var(--destructive) / 0.22), hsl(var(--card)) 46%, hsl(var(--muted) / 0.85))" } : undefined}
+      style={highlightDelayedTask ? { background: "linear-gradient(135deg, hsl(var(--warning) / 0.22), hsl(var(--card)) 46%, hsl(var(--muted) / 0.85))" } : undefined}
       onClick={() => onClick(task)}
     >
       {highlightDelayedTask && (
-        <div className="absolute inset-y-0 left-0 w-1.5 bg-destructive/85" aria-hidden="true" />
+        <div className="absolute inset-y-0 left-0 w-1.5 bg-warning/85" aria-hidden="true" />
       )}
 
       {/* Horní řádek: dodání + stav */}
@@ -53,7 +53,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-primary">{quarterLabel}</span>
           {newQuarterLabel && (
-            <span className="text-xs font-semibold text-destructive">→ {newQuarterLabel}</span>
+            <span className="text-xs font-semibold text-warning">→ {newQuarterLabel}</span>
           )}
         </div>
         <StatusBadge status={task.status} />
@@ -79,7 +79,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
 
       {/* Zpoždění indikátor */}
       {task.delayReason && (
-        <div className="flex items-center gap-1.5 text-xs text-destructive mb-3">
+        <div className="flex items-center gap-1.5 text-xs text-warning mb-3">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span className="line-clamp-1">{task.delayReason}</span>
         </div>

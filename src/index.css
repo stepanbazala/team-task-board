@@ -42,6 +42,10 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Warning – oranžová pro zpožděné úkoly */
+    --warning: 30 90% 50%;
+    --warning-foreground: 0 0% 100%;
+
     /* Borders – jemné */
     --border: 214 20% 90%;
     --input: 214 20% 90%;
