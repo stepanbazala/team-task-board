@@ -21,9 +21,10 @@ interface TaskDetailDialogProps {
   quarters?: QuarterDef[];
   segments?: CategoryDef[];
   deliveryTypes?: CategoryDef[];
+  onEdit?: (task: Task) => void;
 }
 
-export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [], segments = [], deliveryTypes = [] }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [], segments = [], deliveryTypes = [], onEdit }: TaskDetailDialogProps) {
   if (!task) return null;
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
   const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
