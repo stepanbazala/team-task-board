@@ -13,7 +13,7 @@ import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { TaskListOverlay } from "@/components/TaskListOverlay";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, CheckCircle2, Clock, ListTodo, TrendingUp, Timer, Zap, Hourglass, RotateCcw, Eye, X, Filter, FileDown } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, ListTodo, TrendingUp, Timer, Zap, Hourglass, RotateCcw, Eye, X, Filter, FileDown, LayoutDashboard } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format, differenceInDays } from "date-fns";
 import { cs } from "date-fns/locale";
