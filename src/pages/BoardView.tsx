@@ -1,22 +1,21 @@
 /**
  * BoardView – Tabule: maticový pohled na úkoly
  * Řádky = kvartály, Sloupce = druhy dodávky
- * Minimální karty s možností prokliknutí na detail
+ * Drag & drop pro přesuny, zpožděné úkoly jen v newQuarterId
  */
 
-import { useState, useMemo } from "react";
-import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef } from "@/types/task";
-import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes } from "@/services/storage";
+import { useState, useMemo, useCallback, DragEvent } from "react";
+import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, TeamMember } from "@/types/task";
+import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask } from "@/services/storage";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Filter, X, Search, LayoutDashboard, Settings } from "lucide-react";
+import { ArrowLeft, Filter, X, Search, LayoutDashboard, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
-import { cs } from "date-fns/locale";
+import { toast } from "sonner";
 
 function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
   return [...quarters].sort((a, b) => {
@@ -29,7 +28,7 @@ function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
 
 export default function BoardView() {
   const navigate = useNavigate();
-  const [tasks] = useState<Task[]>(getTasks);
+  const [tasks, setTasks] = useState<Task[]>(getTasks);
   const [members] = useState(getMembers);
   const [quarters] = useState<QuarterDef[]>(getQuarters);
   const [segments] = useState<CategoryDef[]>(getSegments);
@@ -37,28 +36,27 @@ export default function BoardView() {
 
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
   const [selectedDeliveryTypes, setSelectedDeliveryTypes] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<TaskStatus[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<string | null>(null);
 
   const sortedQuarters = sortQuarters(quarters);
 
   const activeFilterCount = [
     selectedQuarters.length > 0,
     selectedDeliveryTypes.length > 0,
+    selectedStatuses.length > 0,
     !!selectedOwnerId,
     !!selectedSegmentId,
   ].filter(Boolean).length;
 
-  const toggleQuarter = (qId: string) =>
-    setSelectedQuarters((prev) => prev.includes(qId) ? prev.filter((id) => id !== qId) : [...prev, qId]);
+  const toggle = <T,>(list: T[], item: T) =>
+    list.includes(item) ? list.filter((i) => i !== item) : [...list, item];
 
-  const toggleDeliveryType = (dtId: string) =>
-    setSelectedDeliveryTypes((prev) => prev.includes(dtId) ? prev.filter((id) => id !== dtId) : [...prev, dtId]);
-
-  // Visible quarters & delivery types for the matrix
   const visibleQuarters = useMemo(() => {
     if (selectedQuarters.length === 0) return sortedQuarters;
     return sortedQuarters.filter((q) => selectedQuarters.includes(q.id));
@@ -72,46 +70,94 @@ export default function BoardView() {
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
-      const matchQ = selectedQuarters.length === 0 ||
-        selectedQuarters.includes(t.quarterId) ||
-        (t.newQuarterId && selectedQuarters.includes(t.newQuarterId));
       const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
       const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
+      const matchStatus = selectedStatuses.length === 0 || selectedStatuses.includes(t.status);
       const matchSearch = !searchQuery.trim() ||
         t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchQ && matchOwner && matchSegment && matchSearch;
+      return matchOwner && matchSegment && matchStatus && matchSearch;
     });
-  }, [tasks, selectedQuarters, selectedOwnerId, selectedSegmentId, searchQuery]);
+  }, [tasks, selectedOwnerId, selectedSegmentId, selectedStatuses, searchQuery]);
 
-  // Get tasks for a specific quarter + delivery type cell
+  // Delayed tasks: show only in newQuarterId cell
   const getCellTasks = (quarterId: string, deliveryTypeId: string) => {
     return filteredTasks.filter((t) => {
-      const inQuarter = t.quarterId === quarterId || (t.newQuarterId === quarterId);
+      const isDelayed = Boolean(t.newQuarterId);
+      const inQuarter = isDelayed ? t.newQuarterId === quarterId : t.quarterId === quarterId;
       const inDelivery = t.deliveryTypeId === deliveryTypeId;
       return inQuarter && inDelivery;
     });
   };
 
-  // Tasks without delivery type (uncategorized)
   const getUncategorizedTasks = (quarterId: string) => {
     return filteredTasks.filter((t) => {
-      const inQuarter = t.quarterId === quarterId || (t.newQuarterId === quarterId);
+      const isDelayed = Boolean(t.newQuarterId);
+      const inQuarter = isDelayed ? t.newQuarterId === quarterId : t.quarterId === quarterId;
       return inQuarter && !t.deliveryTypeId;
     });
   };
 
   const findMember = (id: string) => members.find((m) => m.id === id);
-
   const isDelayed = (task: Task) => Boolean(task.delayReason || task.newQuarterId);
 
   const clearFilters = () => {
     setSelectedQuarters([]);
     setSelectedDeliveryTypes([]);
+    setSelectedStatuses([]);
     setSelectedOwnerId(null);
     setSelectedSegmentId(null);
     setSearchQuery("");
   };
+
+  // Drag & drop
+  const handleDragStart = (e: DragEvent, taskId: string) => {
+    e.dataTransfer.setData("text/plain", taskId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDrop = useCallback((e: DragEvent, targetQuarterId: string, targetDeliveryTypeId: string | null) => {
+    e.preventDefault();
+    setDragOverCell(null);
+    const taskId = e.dataTransfer.getData("text/plain");
+    if (!taskId) return;
+
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    const updates: Partial<Task> = {};
+    // Determine current effective quarter
+    const currentQ = task.newQuarterId || task.quarterId;
+    if (currentQ !== targetQuarterId) {
+      // If task has newQuarterId, update that; otherwise update quarterId
+      if (task.newQuarterId) {
+        updates.newQuarterId = targetQuarterId;
+      } else {
+        updates.quarterId = targetQuarterId;
+      }
+    }
+    if (task.deliveryTypeId !== (targetDeliveryTypeId || undefined)) {
+      updates.deliveryTypeId = targetDeliveryTypeId || undefined;
+    }
+
+    if (Object.keys(updates).length === 0) return;
+
+    const updated = updateTask(taskId, updates);
+    if (updated) {
+      setTasks(getTasks());
+      toast.success("Úkol přesunut");
+    }
+  }, [tasks]);
+
+  const handleDragOver = (e: DragEvent, cellId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverCell(cellId);
+  };
+
+  const handleDragLeave = () => setDragOverCell(null);
+
+  const allStatuses: TaskStatus[] = ["todo", "in-progress", "done"];
 
   return (
     <div className="min-h-screen bg-background">
@@ -166,54 +212,48 @@ export default function BoardView() {
 
         <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
           <CollapsibleContent className="space-y-3 pt-2">
-            {/* Quarter filter */}
+            {/* Quarters */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1.5">Kvartály (řádky)</p>
               <div className="flex flex-wrap gap-1.5">
                 {sortedQuarters.map((q) => (
-                  <Button
-                    key={q.id}
-                    size="sm"
-                    variant={selectedQuarters.includes(q.id) ? "default" : "outline"}
-                    className="h-7 text-xs"
-                    onClick={() => toggleQuarter(q.id)}
-                  >
+                  <Button key={q.id} size="sm" variant={selectedQuarters.includes(q.id) ? "default" : "outline"} className="h-7 text-xs" onClick={() => setSelectedQuarters(toggle(selectedQuarters, q.id))}>
                     {q.label}
                   </Button>
                 ))}
               </div>
             </div>
 
-            {/* Delivery type filter */}
+            {/* Delivery types */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1.5">Dodávky (sloupce)</p>
               <div className="flex flex-wrap gap-1.5">
                 {deliveryTypes.map((dt) => (
-                  <Button
-                    key={dt.id}
-                    size="sm"
-                    variant={selectedDeliveryTypes.includes(dt.id) ? "default" : "outline"}
-                    className="h-7 text-xs"
-                    onClick={() => toggleDeliveryType(dt.id)}
-                  >
+                  <Button key={dt.id} size="sm" variant={selectedDeliveryTypes.includes(dt.id) ? "default" : "outline"} className="h-7 text-xs" onClick={() => setSelectedDeliveryTypes(toggle(selectedDeliveryTypes, dt.id))}>
                     {dt.label}
                   </Button>
                 ))}
               </div>
             </div>
 
-            {/* Owner filter */}
+            {/* Status filter */}
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">Stav</p>
+              <div className="flex flex-wrap gap-1.5">
+                {allStatuses.map((s) => (
+                  <Button key={s} size="sm" variant={selectedStatuses.includes(s) ? "default" : "outline"} className="h-7 text-xs" onClick={() => setSelectedStatuses(toggle(selectedStatuses, s))}>
+                    {STATUS_LABELS[s]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Owner */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1.5">Zodpovědná osoba</p>
               <div className="flex flex-wrap gap-1.5">
                 {members.map((m) => (
-                  <Button
-                    key={m.id}
-                    size="sm"
-                    variant={selectedOwnerId === m.id ? "default" : "outline"}
-                    className="h-7 text-xs"
-                    onClick={() => setSelectedOwnerId(selectedOwnerId === m.id ? null : m.id)}
-                  >
+                  <Button key={m.id} size="sm" variant={selectedOwnerId === m.id ? "default" : "outline"} className="h-7 text-xs" onClick={() => setSelectedOwnerId(selectedOwnerId === m.id ? null : m.id)}>
                     <TeamAvatar member={m} size="sm" className="w-4 h-4 mr-1 text-[8px]" />
                     {m.name}
                   </Button>
@@ -221,18 +261,12 @@ export default function BoardView() {
               </div>
             </div>
 
-            {/* Segment filter */}
+            {/* Segment */}
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1.5">Segment</p>
               <div className="flex flex-wrap gap-1.5">
                 {segments.map((s) => (
-                  <Button
-                    key={s.id}
-                    size="sm"
-                    variant={selectedSegmentId === s.id ? "default" : "outline"}
-                    className="h-7 text-xs"
-                    onClick={() => setSelectedSegmentId(selectedSegmentId === s.id ? null : s.id)}
-                  >
+                  <Button key={s.id} size="sm" variant={selectedSegmentId === s.id ? "default" : "outline"} className="h-7 text-xs" onClick={() => setSelectedSegmentId(selectedSegmentId === s.id ? null : s.id)}>
                     {s.label}
                   </Button>
                 ))}
@@ -256,7 +290,6 @@ export default function BoardView() {
                     {dt.label}
                   </th>
                 ))}
-                {/* Uncategorized column */}
                 <th className="p-3 text-left text-sm font-semibold text-muted-foreground border-b border-border min-w-[220px]">
                   Bez dodávky
                 </th>
@@ -269,9 +302,17 @@ export default function BoardView() {
                     <span className="text-sm font-bold text-primary">{q.label}</span>
                   </td>
                   {visibleDeliveryTypes.map((dt) => {
+                    const cellId = `${q.id}__${dt.id}`;
                     const cellTasks = getCellTasks(q.id, dt.id);
+                    const isOver = dragOverCell === cellId;
                     return (
-                      <td key={dt.id} className="p-2 align-top border-l border-border">
+                      <td
+                        key={dt.id}
+                        className={`p-2 align-top border-l border-border transition-colors ${isOver ? "bg-primary/10" : ""}`}
+                        onDragOver={(e) => handleDragOver(e, cellId)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, q.id, dt.id)}
+                      >
                         <div className="space-y-1.5 min-h-[60px]">
                           {cellTasks.map((task) => (
                             <MiniTaskCard
@@ -280,6 +321,7 @@ export default function BoardView() {
                               owner={findMember(task.ownerId)}
                               delayed={isDelayed(task)}
                               onClick={() => setDetailTask(task)}
+                              onDragStart={(e) => handleDragStart(e, task.id)}
                             />
                           ))}
                           {cellTasks.length === 0 && (
@@ -292,19 +334,32 @@ export default function BoardView() {
                     );
                   })}
                   {/* Uncategorized */}
-                  <td className="p-2 align-top border-l border-border">
-                    <div className="space-y-1.5 min-h-[60px]">
-                      {getUncategorizedTasks(q.id).map((task) => (
-                        <MiniTaskCard
-                          key={task.id}
-                          task={task}
-                          owner={findMember(task.ownerId)}
-                          delayed={isDelayed(task)}
-                          onClick={() => setDetailTask(task)}
-                        />
-                      ))}
-                    </div>
-                  </td>
+                  {(() => {
+                    const cellId = `${q.id}__uncategorized`;
+                    const uncatTasks = getUncategorizedTasks(q.id);
+                    const isOver = dragOverCell === cellId;
+                    return (
+                      <td
+                        className={`p-2 align-top border-l border-border transition-colors ${isOver ? "bg-primary/10" : ""}`}
+                        onDragOver={(e) => handleDragOver(e, cellId)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, q.id, null)}
+                      >
+                        <div className="space-y-1.5 min-h-[60px]">
+                          {uncatTasks.map((task) => (
+                            <MiniTaskCard
+                              key={task.id}
+                              task={task}
+                              owner={findMember(task.ownerId)}
+                              delayed={isDelayed(task)}
+                              onClick={() => setDetailTask(task)}
+                              onDragStart={(e) => handleDragStart(e, task.id)}
+                            />
+                          ))}
+                        </div>
+                      </td>
+                    );
+                  })()}
                 </tr>
               ))}
             </tbody>
@@ -334,22 +389,22 @@ export default function BoardView() {
 }
 
 /* ─── Mini Task Card ─── */
-import { TeamMember } from "@/types/task";
-import { AlertTriangle } from "lucide-react";
-
-function MiniTaskCard({ task, owner, delayed, onClick }: {
+function MiniTaskCard({ task, owner, delayed, onClick, onDragStart }: {
   task: Task;
   owner?: TeamMember;
   delayed: boolean;
   onClick: () => void;
+  onDragStart: (e: DragEvent<HTMLDivElement>) => void;
 }) {
   const delayedClass = delayed
-    ? "border-2 border-dashed border-destructive bg-destructive/10"
+    ? "border-2 border-dashed border-warning bg-warning/10"
     : "border border-border bg-card";
 
   return (
     <div
-      className={`rounded-lg p-2.5 cursor-pointer hover:shadow-md transition-all ${delayedClass}`}
+      draggable
+      onDragStart={onDragStart}
+      className={`rounded-lg p-2.5 cursor-grab active:cursor-grabbing hover:shadow-md transition-all ${delayedClass}`}
       onClick={onClick}
     >
       <div className="flex items-start gap-2">
@@ -360,7 +415,7 @@ function MiniTaskCard({ task, owner, delayed, onClick }: {
             {owner && <TeamAvatar member={owner} size="sm" className="w-4 h-4 text-[7px]" />}
           </div>
         </div>
-        {delayed && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />}
+        {delayed && <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />}
       </div>
     </div>
   );
