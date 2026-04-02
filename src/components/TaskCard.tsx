@@ -45,7 +45,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
       onClick={() => onClick(task)}
     >
       {highlightDelayedTask && (
-        <div className="absolute inset-y-0 left-0 w-1.5 bg-destructive/85" aria-hidden="true" />
+        <div className="absolute inset-y-0 left-0 w-1.5 bg-warning/85" aria-hidden="true" />
       )}
 
       {/* Horní řádek: dodání + stav */}
