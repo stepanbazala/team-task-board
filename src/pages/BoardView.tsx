@@ -6,13 +6,14 @@
 
 import { useState, useMemo, useCallback, DragEvent } from "react";
 import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, TeamMember } from "@/types/task";
-import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask } from "@/services/storage";
+import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask, createTask, deleteTask } from "@/services/storage";
+import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowLeft, Filter, X, Search, LayoutDashboard, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Filter, X, Search, LayoutDashboard, AlertTriangle, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -43,7 +44,12 @@ export default function BoardView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [dragOverCell, setDragOverCell] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  const refresh = useCallback(() => {
+    setTasks(getTasks());
+  }, []);
   const sortedQuarters = sortQuarters(quarters);
 
   const activeFilterCount = [
@@ -174,6 +180,9 @@ export default function BoardView() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
               <LayoutDashboard className="w-4 h-4 mr-1" /> Dashboard
+            </Button>
+            <Button size="sm" onClick={() => { setEditingTask(null); setFormOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" /> Nový úkol
             </Button>
           </div>
         </div>
@@ -383,6 +392,29 @@ export default function BoardView() {
         quarters={quarters}
         segments={segments}
         deliveryTypes={deliveryTypes}
+        onEdit={(task: Task) => { setDetailTask(null); setEditingTask(task); setFormOpen(true); }}
+      />
+
+      {/* Form dialog */}
+      <TaskFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        task={editingTask}
+        members={members}
+        quarters={quarters}
+        segments={segments}
+        deliveryTypes={deliveryTypes}
+        onSave={(data) => {
+          if (editingTask) {
+            updateTask(editingTask.id, data);
+            toast.success("Úkol byl upraven");
+          } else {
+            createTask(data);
+            toast.success("Úkol byl vytvořen");
+          }
+          setEditingTask(null);
+          refresh();
+        }}
       />
     </div>
   );

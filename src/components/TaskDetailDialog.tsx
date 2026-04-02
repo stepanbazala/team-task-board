@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImageLightbox } from "@/components/ImageLightbox";
-import { Calendar, User, Users, AlertTriangle, Play, ArrowRight } from "lucide-react";
+import { Calendar, User, Users, AlertTriangle, Play, ArrowRight, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 
@@ -21,9 +22,10 @@ interface TaskDetailDialogProps {
   quarters?: QuarterDef[];
   segments?: CategoryDef[];
   deliveryTypes?: CategoryDef[];
+  onEdit?: (task: Task) => void;
 }
 
-export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [], segments = [], deliveryTypes = [] }: TaskDetailDialogProps) {
+export function TaskDetailDialog({ open, onOpenChange, task, owner, participants = [], quarters = [], segments = [], deliveryTypes = [], onEdit }: TaskDetailDialogProps) {
   if (!task) return null;
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
   const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
@@ -46,6 +48,11 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
             <StatusBadge status={task.status} />
           </div>
           <DialogTitle className="text-xl leading-snug">{task.title}</DialogTitle>
+          {onEdit && (
+            <Button variant="outline" size="sm" className="mt-2 w-fit" onClick={() => onEdit(task)}>
+              <Pencil className="w-3.5 h-3.5 mr-1" /> Upravit
+            </Button>
+          )}
         </DialogHeader>
 
         <div className="space-y-5">
