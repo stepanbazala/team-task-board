@@ -35,7 +35,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
   const hasDelay = Boolean(task.delayReason || task.newQuarterId);
   const highlightDelayedTask = isRescheduled || hasDelay;
   const rescheduledCardClass = highlightDelayedTask
-    ? "border-[8px] border-dashed border-destructive bg-destructive/20 shadow-[0_0_0_4px_hsl(var(--destructive)/0.18),0_18px_45px_-18px_hsl(var(--destructive)/0.75)] ring-4 ring-destructive/35 relative overflow-hidden"
+    ? "border-[8px] border-dashed border-warning bg-warning/20 shadow-[0_0_0_4px_hsl(var(--warning)/0.18),0_18px_45px_-18px_hsl(var(--warning)/0.75)] ring-4 ring-warning/35 relative overflow-hidden"
     : "";
 
   return (
