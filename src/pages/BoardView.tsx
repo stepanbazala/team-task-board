@@ -181,6 +181,9 @@ export default function BoardView() {
             <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")}>
               <LayoutDashboard className="w-4 h-4 mr-1" /> Dashboard
             </Button>
+            <Button size="sm" onClick={() => { setEditingTask(null); setFormOpen(true); }}>
+              <Plus className="w-4 h-4 mr-1" /> Nový úkol
+            </Button>
           </div>
         </div>
       </header>
