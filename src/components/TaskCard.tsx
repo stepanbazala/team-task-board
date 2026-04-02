@@ -79,7 +79,7 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
 
       {/* Zpoždění indikátor */}
       {task.delayReason && (
-        <div className="flex items-center gap-1.5 text-xs text-destructive mb-3">
+        <div className="flex items-center gap-1.5 text-xs text-warning mb-3">
           <AlertTriangle className="w-3.5 h-3.5" />
           <span className="line-clamp-1">{task.delayReason}</span>
         </div>
