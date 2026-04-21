@@ -17,7 +17,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <PasswordGate>
-        <BrowserRouter>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Routes>
             <Route path="/" element={<AdminBoard />} />
             <Route path="/dashboard" element={<Dashboard />} />
