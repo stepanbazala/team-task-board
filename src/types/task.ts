@@ -39,7 +39,9 @@ export interface Task {
   startDate?: string;
   delayReason?: string;
   newQuarterId?: string;
-  /** Segment (kategorie 1) */
+  /** Segmenty (kategorie 1) – multi-select */
+  segmentIds?: string[];
+  /** @deprecated Použij segmentIds */
   segmentId?: string;
   /** Druh dodávky (kategorie 2) */
   deliveryTypeId?: string;
