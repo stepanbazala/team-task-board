@@ -5,7 +5,7 @@
  */
 
 import { useState, useMemo, useRef } from "react";
-import { Task, STATUS_LABELS, TaskStatus, QuarterDef, CategoryDef } from "@/types/task";
+import { Task, STATUS_LABELS, TaskStatus, QuarterDef, CategoryDef, getTaskSegmentIds } from "@/types/task";
 import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes } from "@/services/storage";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -79,7 +79,7 @@ export default function Dashboard() {
   /* Filtry – stejné jako ve správě */
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
   const [selectedDeliveryTypeId, setSelectedDeliveryTypeId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -105,7 +105,7 @@ export default function Dashboard() {
   const activeFilterCount = [
     selectedQuarters.length > 0,
     !!selectedOwnerId,
-    !!selectedSegmentId,
+    selectedSegmentIds.length > 0,
     !!selectedDeliveryTypeId,
   ].filter(Boolean).length;
 
@@ -116,11 +116,12 @@ export default function Dashboard() {
         selectedQuarters.includes(t.quarterId) ||
         (t.newQuarterId && selectedQuarters.includes(t.newQuarterId));
       const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
-      const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
+      const taskSegs = getTaskSegmentIds(t);
+      const matchSegment = selectedSegmentIds.length === 0 || selectedSegmentIds.some((id) => taskSegs.includes(id));
       const matchDelivery = !selectedDeliveryTypeId || t.deliveryTypeId === selectedDeliveryTypeId;
       return matchQ && matchOwner && matchSegment && matchDelivery;
     });
-  }, [tasks, selectedQuarters, selectedOwnerId, selectedSegmentId, selectedDeliveryTypeId]);
+  }, [tasks, selectedQuarters, selectedOwnerId, selectedSegmentIds, selectedDeliveryTypeId]);
 
   const stats = useMemo(() => {
     const todo = filtered.filter((t) => t.status === "todo").length;
@@ -173,7 +174,7 @@ export default function Dashboard() {
 
   const segmentBarData = useMemo(() =>
     segments.map((s) => {
-      const sTasks = filtered.filter((t) => t.segmentId === s.id);
+      const sTasks = filtered.filter((t) => getTaskSegmentIds(t).includes(s.id));
       return {
         id: s.id, name: s.label,
         "K řešení": sTasks.filter((t) => t.status === "todo").length,
@@ -238,7 +239,7 @@ export default function Dashboard() {
     const status = STATUS_MAP[statusLabel];
     const catName = data?.name || "";
     const catTasks = filtered.filter((t) => {
-      const matchCat = categoryType === "segment" ? t.segmentId === catId : t.deliveryTypeId === catId;
+      const matchCat = categoryType === "segment" ? getTaskSegmentIds(t).includes(catId) : t.deliveryTypeId === catId;
       return matchCat && t.status === status;
     });
     openOverlay(`${catName} – ${statusLabel}`, catTasks);
@@ -352,13 +353,24 @@ export default function Dashboard() {
                 </Button>
               ))}
             </div>
-            {/* Segment */}
+            {/* Segment (multi) */}
             {segments.length > 0 && (
               <div className="flex gap-2 flex-wrap items-center">
                 <span className="text-xs text-muted-foreground font-medium mr-1">Segment:</span>
-                <Button variant={!selectedSegmentId ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(null)}>Vše</Button>
+                <Button variant={selectedSegmentIds.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentIds([])}>Vše</Button>
                 {segments.map((s) => (
-                  <Button key={s.id} variant={selectedSegmentId === s.id ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(selectedSegmentId === s.id ? null : s.id)}>{s.label}</Button>
+                  <Button
+                    key={s.id}
+                    variant={selectedSegmentIds.includes(s.id) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() =>
+                      setSelectedSegmentIds((prev) =>
+                        prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                      )
+                    }
+                  >
+                    {s.label}
+                  </Button>
                 ))}
               </div>
             )}
@@ -373,7 +385,7 @@ export default function Dashboard() {
               </div>
             )}
             {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedOwnerId(null); setSelectedSegmentId(null); setSelectedDeliveryTypeId(null); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedOwnerId(null); setSelectedSegmentIds([]); setSelectedDeliveryTypeId(null); }}>
                 <X className="w-4 h-4 mr-1" /> Zrušit filtry
               </Button>
             )}
@@ -539,7 +551,8 @@ export default function Dashboard() {
                   {memberTasks.length > 0 ? (
                     <div className="divide-y divide-border">
                       {memberTasks.map((task) => {
-                        const segmentLabel = task.segmentId ? segments.find((s) => s.id === task.segmentId)?.label : undefined;
+                        const taskSegs = getTaskSegmentIds(task);
+                        const segmentLabels = taskSegs.map((sid) => segments.find((s) => s.id === sid)?.label).filter(Boolean) as string[];
                         const deliveryLabel = task.deliveryTypeId ? deliveryTypes.find((d) => d.id === task.deliveryTypeId)?.label : undefined;
                         return (
                           <div
@@ -549,9 +562,9 @@ export default function Dashboard() {
                           >
                             <StatusBadge status={task.status} />
                             <span className="flex-1 font-medium text-sm">{task.title}</span>
-                            {segmentLabel && (
-                              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary hidden sm:block">{segmentLabel}</span>
-                            )}
+                            {segmentLabels.map((label) => (
+                              <span key={label} className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary hidden sm:block">{label}</span>
+                            ))}
                             {deliveryLabel && (
                               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent text-accent-foreground hidden sm:block">{deliveryLabel}</span>
                             )}
