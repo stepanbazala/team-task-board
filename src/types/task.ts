@@ -59,3 +59,10 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   "in-progress": "Probíhá",
   "done": "Hotovo",
 };
+
+/** Vrátí pole segment ID s ohledem na zpětnou kompatibilitu (segmentId -> segmentIds) */
+export function getTaskSegmentIds(task: Pick<Task, "segmentIds" | "segmentId">): string[] {
+  if (task.segmentIds && task.segmentIds.length > 0) return task.segmentIds;
+  if (task.segmentId) return [task.segmentId];
+  return [];
+}
