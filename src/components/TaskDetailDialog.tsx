@@ -3,7 +3,7 @@
  * Obrázky jako miniatury s lightboxem, kategorie tagy
  */
 
-import { Task, STATUS_LABELS, TeamMember, QuarterDef, CategoryDef } from "@/types/task";
+import { Task, STATUS_LABELS, TeamMember, QuarterDef, CategoryDef, getTaskSegmentIds } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -29,7 +29,9 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
   if (!task) return null;
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
   const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
-  const segmentLabel = task.segmentId ? segments.find((s) => s.id === task.segmentId)?.label : undefined;
+  const segmentLabels = getTaskSegmentIds(task)
+    .map((sid) => segments.find((s) => s.id === sid)?.label)
+    .filter(Boolean) as string[];
   const deliveryLabel = task.deliveryTypeId ? deliveryTypes.find((d) => d.id === task.deliveryTypeId)?.label : undefined;
   const images = task.imageUrls || (task.imageUrl ? [task.imageUrl] : []);
 
@@ -57,11 +59,11 @@ export function TaskDetailDialog({ open, onOpenChange, task, owner, participants
 
         <div className="space-y-5">
           {/* Kategorie tagy */}
-          {(segmentLabel || deliveryLabel) && (
+          {(segmentLabels.length > 0 || deliveryLabel) && (
             <div className="flex gap-2 flex-wrap">
-              {segmentLabel && (
-                <span className="text-xs font-medium px-3 py-1 rounded-full bg-primary/10 text-primary">{segmentLabel}</span>
-              )}
+              {segmentLabels.map((label) => (
+                <span key={label} className="text-xs font-medium px-3 py-1 rounded-full bg-primary/10 text-primary">{label}</span>
+              ))}
               {deliveryLabel && (
                 <span className="text-xs font-medium px-3 py-1 rounded-full bg-accent text-accent-foreground">{deliveryLabel}</span>
               )}

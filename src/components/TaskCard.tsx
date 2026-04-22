@@ -3,7 +3,7 @@
  * Miniaturní obrázky, kategorie tagy, ztučněný čárkovaný okraj pro přeplánované úkoly
  */
 
-import { Task, TeamMember, QuarterDef, CategoryDef } from "@/types/task";
+import { Task, TeamMember, QuarterDef, CategoryDef, getTaskSegmentIds } from "@/types/task";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImageLightbox } from "@/components/ImageLightbox";
@@ -29,7 +29,9 @@ interface TaskCardProps {
 export function TaskCard({ task, owner, participants = [], quarters, segments = [], deliveryTypes = [], isRescheduled, onEdit, onDelete, onDuplicate, onClick }: TaskCardProps) {
   const quarterLabel = quarters.find((q) => q.id === task.quarterId)?.label || task.quarterId;
   const newQuarterLabel = task.newQuarterId ? quarters.find((q) => q.id === task.newQuarterId)?.label : undefined;
-  const segmentLabel = task.segmentId ? segments.find((s) => s.id === task.segmentId)?.label : undefined;
+  const segmentLabels = getTaskSegmentIds(task)
+    .map((sid) => segments.find((s) => s.id === sid)?.label)
+    .filter(Boolean) as string[];
   const deliveryLabel = task.deliveryTypeId ? deliveryTypes.find((d) => d.id === task.deliveryTypeId)?.label : undefined;
   const images = task.imageUrls || (task.imageUrl ? [task.imageUrl] : []);
   const hasDelay = Boolean(task.delayReason || task.newQuarterId);
@@ -63,11 +65,11 @@ export function TaskCard({ task, owner, participants = [], quarters, segments = 
       <h3 className="font-semibold text-card-foreground mb-2 leading-snug">{task.title}</h3>
 
       {/* Kategorie tagy */}
-      {(segmentLabel || deliveryLabel) && (
+      {(segmentLabels.length > 0 || deliveryLabel) && (
         <div className="flex gap-1.5 mb-2 flex-wrap">
-          {segmentLabel && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">{segmentLabel}</span>
-          )}
+          {segmentLabels.map((label) => (
+            <span key={label} className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">{label}</span>
+          ))}
           {deliveryLabel && (
             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent text-accent-foreground">{deliveryLabel}</span>
           )}
