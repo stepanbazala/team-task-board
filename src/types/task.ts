@@ -39,7 +39,9 @@ export interface Task {
   startDate?: string;
   delayReason?: string;
   newQuarterId?: string;
-  /** Segment (kategorie 1) */
+  /** Segmenty (kategorie 1) – multi-select */
+  segmentIds?: string[];
+  /** @deprecated Použij segmentIds */
   segmentId?: string;
   /** Druh dodávky (kategorie 2) */
   deliveryTypeId?: string;
@@ -57,3 +59,10 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   "in-progress": "Probíhá",
   "done": "Hotovo",
 };
+
+/** Vrátí pole segment ID s ohledem na zpětnou kompatibilitu (segmentId -> segmentIds) */
+export function getTaskSegmentIds(task: Pick<Task, "segmentIds" | "segmentId">): string[] {
+  if (task.segmentIds && task.segmentIds.length > 0) return task.segmentIds;
+  if (task.segmentId) return [task.segmentId];
+  return [];
+}

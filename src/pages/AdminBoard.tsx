@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef } from "@/types/task";
+import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, getTaskSegmentIds } from "@/types/task";
 import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, createTask, updateTask, deleteTask } from "@/services/storage";
 import { TaskCard } from "@/components/TaskCard";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
@@ -42,7 +42,7 @@ export default function AdminBoard() {
   const [deliveryTypes, setDeliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
   const [selectedDeliveryTypeId, setSelectedDeliveryTypeId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,7 +63,7 @@ export default function AdminBoard() {
   const activeFilterCount = [
     selectedQuarters.length > 0,
     !!selectedOwnerId,
-    !!selectedSegmentId,
+    selectedSegmentIds.length > 0,
     !!selectedDeliveryTypeId,
   ].filter(Boolean).length;
 
@@ -73,7 +73,8 @@ export default function AdminBoard() {
       selectedQuarters.includes(t.quarterId) ||
       (t.newQuarterId && selectedQuarters.includes(t.newQuarterId));
     const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
-    const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
+    const taskSegs = getTaskSegmentIds(t);
+    const matchSegment = selectedSegmentIds.length === 0 || selectedSegmentIds.some((id) => taskSegs.includes(id));
     const matchDelivery = !selectedDeliveryTypeId || t.deliveryTypeId === selectedDeliveryTypeId;
     const matchSearch = !searchQuery.trim() || 
       t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -149,7 +150,7 @@ export default function AdminBoard() {
       delayReason: undefined,
       newQuarterId: undefined,
       imageUrls: task.imageUrls,
-      segmentId: task.segmentId,
+      segmentIds: getTaskSegmentIds(task),
       deliveryTypeId: task.deliveryTypeId,
     });
     refresh();
@@ -234,13 +235,24 @@ export default function AdminBoard() {
                 </Button>
               ))}
             </div>
-            {/* Filtr dle segmentu */}
+            {/* Filtr dle segmentu (multi) */}
             {segments.length > 0 && (
               <div className="flex gap-2 flex-wrap items-center">
                 <span className="text-xs text-muted-foreground font-medium mr-1">Segment:</span>
-                <Button variant={!selectedSegmentId ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(null)}>Vše</Button>
+                <Button variant={selectedSegmentIds.length === 0 ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentIds([])}>Vše</Button>
                 {segments.map((s) => (
-                  <Button key={s.id} variant={selectedSegmentId === s.id ? "default" : "outline"} size="sm" onClick={() => setSelectedSegmentId(selectedSegmentId === s.id ? null : s.id)}>{s.label}</Button>
+                  <Button
+                    key={s.id}
+                    variant={selectedSegmentIds.includes(s.id) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() =>
+                      setSelectedSegmentIds((prev) =>
+                        prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                      )
+                    }
+                  >
+                    {s.label}
+                  </Button>
                 ))}
               </div>
             )}
@@ -255,7 +267,7 @@ export default function AdminBoard() {
               </div>
             )}
             {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedOwnerId(null); setSelectedSegmentId(null); setSelectedDeliveryTypeId(null); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedOwnerId(null); setSelectedSegmentIds([]); setSelectedDeliveryTypeId(null); }}>
                 <X className="w-4 h-4 mr-1" /> Zrušit filtry
               </Button>
             )}

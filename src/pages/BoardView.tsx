@@ -5,7 +5,7 @@
  */
 
 import { useState, useMemo, useCallback, DragEvent } from "react";
-import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, TeamMember } from "@/types/task";
+import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, TeamMember, getTaskSegmentIds } from "@/types/task";
 import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask, createTask, deleteTask } from "@/services/storage";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -39,7 +39,7 @@ export default function BoardView() {
   const [selectedDeliveryTypes, setSelectedDeliveryTypes] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<TaskStatus[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState<string | null>(null);
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [detailTask, setDetailTask] = useState<Task | null>(null);
@@ -57,7 +57,7 @@ export default function BoardView() {
     selectedDeliveryTypes.length > 0,
     selectedStatuses.length > 0,
     !!selectedOwnerId,
-    !!selectedSegmentId,
+    selectedSegmentIds.length > 0,
   ].filter(Boolean).length;
 
   const toggle = <T,>(list: T[], item: T) =>
@@ -77,14 +77,15 @@ export default function BoardView() {
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
       const matchOwner = !selectedOwnerId || t.ownerId === selectedOwnerId;
-      const matchSegment = !selectedSegmentId || t.segmentId === selectedSegmentId;
+      const taskSegs = getTaskSegmentIds(t);
+      const matchSegment = selectedSegmentIds.length === 0 || selectedSegmentIds.some((id) => taskSegs.includes(id));
       const matchStatus = selectedStatuses.length === 0 || selectedStatuses.includes(t.status);
       const matchSearch = !searchQuery.trim() ||
         t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.description.toLowerCase().includes(searchQuery.toLowerCase());
       return matchOwner && matchSegment && matchStatus && matchSearch;
     });
-  }, [tasks, selectedOwnerId, selectedSegmentId, selectedStatuses, searchQuery]);
+  }, [tasks, selectedOwnerId, selectedSegmentIds, selectedStatuses, searchQuery]);
 
   // Delayed tasks: show only in newQuarterId cell
   const getCellTasks = (quarterId: string, deliveryTypeId: string) => {
@@ -112,7 +113,7 @@ export default function BoardView() {
     setSelectedDeliveryTypes([]);
     setSelectedStatuses([]);
     setSelectedOwnerId(null);
-    setSelectedSegmentId(null);
+    setSelectedSegmentIds([]);
     setSearchQuery("");
   };
 
@@ -270,12 +271,22 @@ export default function BoardView() {
               </div>
             </div>
 
-            {/* Segment */}
+            {/* Segment (multi) */}
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">Segment</p>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">Segment (lze vybrat více)</p>
               <div className="flex flex-wrap gap-1.5">
                 {segments.map((s) => (
-                  <Button key={s.id} size="sm" variant={selectedSegmentId === s.id ? "default" : "outline"} className="h-7 text-xs" onClick={() => setSelectedSegmentId(selectedSegmentId === s.id ? null : s.id)}>
+                  <Button
+                    key={s.id}
+                    size="sm"
+                    variant={selectedSegmentIds.includes(s.id) ? "default" : "outline"}
+                    className="h-7 text-xs"
+                    onClick={() =>
+                      setSelectedSegmentIds((prev) =>
+                        prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                      )
+                    }
+                  >
                     {s.label}
                   </Button>
                 ))}

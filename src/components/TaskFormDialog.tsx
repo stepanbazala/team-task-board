@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { Task, TaskStatus, QuarterDef, STATUS_LABELS, TeamMember, CategoryDef } from "@/types/task";
+import { Task, TaskStatus, QuarterDef, STATUS_LABELS, TeamMember, CategoryDef, getTaskSegmentIds } from "@/types/task";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, se
   const [delayReason, setDelayReason] = useState("");
   const [newQuarterId, setNewQuarterId] = useState<string | undefined>();
   const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [segmentId, setSegmentId] = useState<string | undefined>();
+  const [segmentIds, setSegmentIds] = useState<string[]>([]);
   const [deliveryTypeId, setDeliveryTypeId] = useState<string | undefined>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelRef = useRef(false);
@@ -58,7 +58,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, se
       setDelayReason(task.delayReason || "");
       setNewQuarterId(task.newQuarterId);
       setImageUrls(task.imageUrls || (task.imageUrl ? [task.imageUrl] : []));
-      setSegmentId(task.segmentId);
+      setSegmentIds(getTaskSegmentIds(task));
       setDeliveryTypeId(task.deliveryTypeId);
     } else {
       setTitle("");
@@ -72,7 +72,7 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, se
       setDelayReason("");
       setNewQuarterId(undefined);
       setImageUrls([]);
-      setSegmentId(undefined);
+      setSegmentIds([]);
       setDeliveryTypeId(undefined);
     }
     cancelRef.current = false;
@@ -116,7 +116,8 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, se
       delayReason: delayReason.trim() || undefined,
       newQuarterId: delayReason.trim() ? newQuarterId : undefined,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-      segmentId,
+      segmentIds: segmentIds.length > 0 ? segmentIds : undefined,
+      segmentId: undefined,
       deliveryTypeId,
     };
   };
@@ -194,19 +195,37 @@ export function TaskFormDialog({ open, onOpenChange, task, members, quarters, se
             </div>
           </div>
 
-          {/* Segment + Druh dodávky */}
+          {/* Segmenty (multi) + Druh dodávky */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Segment</Label>
-              <Select value={segmentId || "__none__"} onValueChange={(v) => setSegmentId(v === "__none__" ? undefined : v)}>
-                <SelectTrigger><SelectValue placeholder="Vyberte" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">— Bez segmentu —</SelectItem>
-                  {segments.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Segmenty (lze vybrat více)</Label>
+              {segments.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Žádné segmenty nejsou nastaveny.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 p-2 rounded-md border border-input bg-background min-h-10">
+                  {segments.map((s) => {
+                    const active = segmentIds.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() =>
+                          setSegmentIds((prev) =>
+                            prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                          )
+                        }
+                        className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
+                          active
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background text-foreground border-border hover:border-primary/50"
+                        }`}
+                      >
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Druh dodávky</Label>
