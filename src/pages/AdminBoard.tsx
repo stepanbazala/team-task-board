@@ -3,9 +3,9 @@
  * Drag & drop, multi-kvartál filtr, filtr dle vlastníka, správa nastavení, duplikace, kategorie
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, getTaskSegmentIds } from "@/types/task";
-import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, createTask, updateTask, deleteTask } from "@/services/storage";
+import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, createTask, updateTask, deleteTask, subscribeToStorage } from "@/services/storage";
 import { TaskCard } from "@/components/TaskCard";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
@@ -59,6 +59,12 @@ export default function AdminBoard() {
     setSegments(getSegments());
     setDeliveryTypes(getDeliveryTypes());
   }, []);
+
+  // Realtime + lokální mutace -> refresh
+  useEffect(() => {
+    const unsub = subscribeToStorage(refresh);
+    return () => { unsub(); };
+  }, [refresh]);
 
   const activeFilterCount = [
     selectedQuarters.length > 0,

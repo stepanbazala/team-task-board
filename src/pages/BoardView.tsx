@@ -4,9 +4,9 @@
  * Drag & drop pro přesuny, zpožděné úkoly jen v newQuarterId
  */
 
-import { useState, useMemo, useCallback, DragEvent } from "react";
+import { useState, useMemo, useCallback, useEffect, DragEvent } from "react";
 import { Task, TaskStatus, STATUS_LABELS, QuarterDef, CategoryDef, TeamMember, getTaskSegmentIds } from "@/types/task";
-import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask, createTask, deleteTask } from "@/services/storage";
+import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, updateTask, createTask, deleteTask, subscribeToStorage } from "@/services/storage";
 import { TaskFormDialog } from "@/components/TaskFormDialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TeamAvatar } from "@/components/TeamAvatar";
@@ -30,10 +30,10 @@ function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
 export default function BoardView() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<Task[]>(getTasks);
-  const [members] = useState(getMembers);
-  const [quarters] = useState<QuarterDef[]>(getQuarters);
-  const [segments] = useState<CategoryDef[]>(getSegments);
-  const [deliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
+  const [members, setMembers] = useState(getMembers);
+  const [quarters, setQuarters] = useState<QuarterDef[]>(getQuarters);
+  const [segments, setSegments] = useState<CategoryDef[]>(getSegments);
+  const [deliveryTypes, setDeliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
 
   const [selectedQuarters, setSelectedQuarters] = useState<string[]>([]);
   const [selectedDeliveryTypes, setSelectedDeliveryTypes] = useState<string[]>([]);
@@ -49,7 +49,18 @@ export default function BoardView() {
 
   const refresh = useCallback(() => {
     setTasks(getTasks());
+    setMembers(getMembers());
+    setQuarters(getQuarters());
+    setSegments(getSegments());
+    setDeliveryTypes(getDeliveryTypes());
   }, []);
+
+  // Realtime sync
+  useEffect(() => {
+    const unsub = subscribeToStorage(refresh);
+    return () => { unsub(); };
+  }, [refresh]);
+
   const sortedQuarters = sortQuarters(quarters);
 
   const activeFilterCount = [

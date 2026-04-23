@@ -4,9 +4,9 @@
  * Klikatelné metriky/grafy → overlay s úkoly
  */
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { Task, STATUS_LABELS, TaskStatus, QuarterDef, CategoryDef, getTaskSegmentIds } from "@/types/task";
-import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes } from "@/services/storage";
+import { getTasks, getMembers, getQuarters, getSegments, getDeliveryTypes, subscribeToStorage } from "@/services/storage";
 import { TeamAvatar } from "@/components/TeamAvatar";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TaskDetailDialog } from "@/components/TaskDetailDialog";
@@ -67,11 +67,23 @@ function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
 export default function Dashboard() {
   const navigate = useNavigate();
   const contentRef = useRef<HTMLDivElement>(null);
-  const [tasks] = useState<Task[]>(getTasks);
-  const [members] = useState(getMembers);
-  const [quarters] = useState<QuarterDef[]>(getQuarters);
-  const [segments] = useState<CategoryDef[]>(getSegments);
-  const [deliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
+  const [tasks, setTasks] = useState<Task[]>(getTasks);
+  const [members, setMembers] = useState(getMembers);
+  const [quarters, setQuarters] = useState<QuarterDef[]>(getQuarters);
+  const [segments, setSegments] = useState<CategoryDef[]>(getSegments);
+  const [deliveryTypes, setDeliveryTypes] = useState<CategoryDef[]>(getDeliveryTypes);
+
+  const refresh = useCallback(() => {
+    setTasks(getTasks());
+    setMembers(getMembers());
+    setQuarters(getQuarters());
+    setSegments(getSegments());
+    setDeliveryTypes(getDeliveryTypes());
+  }, []);
+  useEffect(() => {
+    const unsub = subscribeToStorage(refresh);
+    return () => { unsub(); };
+  }, [refresh]);
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [visibleSections, setVisibleSections] = useState<SectionKey[]>(ALL_SECTIONS);
   const [exporting, setExporting] = useState(false);

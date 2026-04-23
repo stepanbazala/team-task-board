@@ -1,18 +1,21 @@
 /**
- * Služba pro práci s localStorage
- * V Fázi 2 se tyto funkce nahradí voláním Firebase Firestore.
+ * Sdílené úložiště dat – Lovable Cloud (Supabase)
+ *
+ * Architektura:
+ * - Při startu aplikace se zavolá `initStorage()`, která načte všechna data ze Supabase
+ *   do in-memory cache a (jednorázově) naimportuje stávající localStorage data, pokud
+ *   jsou v DB prázdné tabulky.
+ * - Všechny `get*` funkce vracejí synchronně z cache → ostatní komponenty zůstaly beze změny.
+ * - Všechny mutační funkce (`addX`, `updateX`, `deleteX`, `createTask`, `updateTask`, `deleteTask`)
+ *   zapisují do Supabase a optimisticky aktualizují cache.
+ * - Realtime subscription synchronizuje změny mezi všemi uživateli.
  */
 
 import { Task, TeamMember, QuarterDef, CategoryDef } from "@/types/task";
-
-const TASKS_KEY = "taskboard_tasks";
-const MEMBERS_KEY = "taskboard_members";
-const QUARTERS_KEY = "taskboard_quarters";
-const SEGMENTS_KEY = "taskboard_segments";
-const DELIVERY_TYPES_KEY = "taskboard_delivery_types";
+import { supabase } from "@/integrations/supabase/client";
 
 // ==========================================
-// Výchozí data
+// Výchozí seed data (použije se jen pokud je DB úplně prázdná)
 // ==========================================
 const DEFAULT_QUARTERS: QuarterDef[] = [
   { id: "q1-2026", label: "Q1/2026" },
@@ -42,98 +45,22 @@ const DEFAULT_DELIVERY_TYPES: CategoryDef[] = [
   { id: "dt4", label: "Testování" },
 ];
 
-const DEFAULT_TASKS: Task[] = [
-  {
-    id: "t1",
-    title: "Redesign přihlašovací stránky",
-    description: "Kompletní přepracování UI/UX přihlašovacího formuláře dle nového brandu.",
-    status: "done",
-    quarterId: "q1-2026",
-    ownerId: "m1",
-    participantIds: ["m2", "m4"],
-    dueDate: "2026-03-15",
-    startDate: "2026-01-10",
-    segmentId: "seg3",
-    deliveryTypeId: "dt1",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t2",
-    title: "Implementace notifikačního systému",
-    description: "Push a in-app notifikace pro klíčové události.",
-    status: "in-progress",
-    quarterId: "q1-2026",
-    ownerId: "m2",
-    participantIds: ["m1", "m3"],
-    dueDate: "2026-03-31",
-    startDate: "2026-02-15",
-    delayReason: "Čekáme na API třetí strany pro push notifikace.",
-    newQuarterId: "q2-2026",
-    segmentId: "seg1",
-    deliveryTypeId: "dt1",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t3",
-    title: "API pro export dat",
-    description: "REST endpoint pro export transakčních dat do CSV a PDF formátů.",
-    status: "todo",
-    quarterId: "q2-2026",
-    ownerId: "m3",
-    participantIds: ["m5"],
-    dueDate: "2026-06-15",
-    segmentId: "seg2",
-    deliveryTypeId: "dt2",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t4",
-    title: "Optimalizace výkonu dashboardu",
-    description: "Lazy loading, virtualizace seznamů a caching.",
-    status: "in-progress",
-    quarterId: "q2-2026",
-    ownerId: "m4",
-    participantIds: ["m1", "m3"],
-    dueDate: "2026-05-30",
-    startDate: "2026-04-01",
-    segmentId: "seg3",
-    deliveryTypeId: "dt1",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "t5",
-    title: "Mobilní verze portfolia",
-    description: "Responzivní design pro sekci investičního portfolia.",
-    status: "todo",
-    quarterId: "q2-2026",
-    ownerId: "m5",
-    participantIds: ["m2", "m4"],
-    dueDate: "2026-06-30",
-    segmentId: "seg1",
-    deliveryTypeId: "dt3",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+// ==========================================
+// In-memory cache
+// ==========================================
+let cacheQuarters: QuarterDef[] = [];
+let cacheMembers: TeamMember[] = [];
+let cacheSegments: CategoryDef[] = [];
+let cacheDeliveryTypes: CategoryDef[] = [];
+let cacheTasks: Task[] = [];
 
-// ==========================================
-// Generic helpers
-// ==========================================
-function getList<T>(key: string, defaults: T[]): T[] {
-  const data = localStorage.getItem(key);
-  if (!data) {
-    localStorage.setItem(key, JSON.stringify(defaults));
-    return defaults;
-  }
-  return JSON.parse(data);
+const listeners = new Set<() => void>();
+function notify() {
+  listeners.forEach((fn) => fn());
 }
-
-function saveList<T>(key: string, list: T[]): void {
-  localStorage.setItem(key, JSON.stringify(list));
+export function subscribeToStorage(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
 }
 
 function genId(prefix: string): string {
@@ -141,167 +68,345 @@ function genId(prefix: string): string {
 }
 
 // ==========================================
+// Mapování DB ↔ App (snake_case ↔ camelCase)
+// ==========================================
+type DbTask = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  quarter_id: string | null;
+  owner_id: string | null;
+  participant_ids: string[];
+  due_date: string | null;
+  start_date: string | null;
+  delay_reason: string | null;
+  new_quarter_id: string | null;
+  segment_ids: string[];
+  delivery_type_id: string | null;
+  image_urls: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+function dbToTask(r: DbTask): Task {
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description ?? "",
+    status: r.status as Task["status"],
+    quarterId: r.quarter_id ?? "",
+    ownerId: r.owner_id ?? "",
+    participantIds: r.participant_ids ?? [],
+    dueDate: r.due_date ?? "",
+    startDate: r.start_date ?? undefined,
+    delayReason: r.delay_reason ?? undefined,
+    newQuarterId: r.new_quarter_id ?? undefined,
+    segmentIds: r.segment_ids ?? [],
+    deliveryTypeId: r.delivery_type_id ?? undefined,
+    imageUrls: r.image_urls ?? [],
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function taskToDb(t: Partial<Task>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (t.id !== undefined) out.id = t.id;
+  if (t.title !== undefined) out.title = t.title;
+  if (t.description !== undefined) out.description = t.description;
+  if (t.status !== undefined) out.status = t.status;
+  if (t.quarterId !== undefined) out.quarter_id = t.quarterId || null;
+  if (t.ownerId !== undefined) out.owner_id = t.ownerId || null;
+  if (t.participantIds !== undefined) out.participant_ids = t.participantIds;
+  if (t.dueDate !== undefined) out.due_date = t.dueDate || null;
+  if (t.startDate !== undefined) out.start_date = t.startDate || null;
+  if (t.delayReason !== undefined) out.delay_reason = t.delayReason || null;
+  if (t.newQuarterId !== undefined) out.new_quarter_id = t.newQuarterId || null;
+  if (t.segmentIds !== undefined) out.segment_ids = t.segmentIds;
+  if (t.deliveryTypeId !== undefined) out.delivery_type_id = t.deliveryTypeId || null;
+  if (t.imageUrls !== undefined) out.image_urls = t.imageUrls;
+  return out;
+}
+
+function dbMember(r: { id: string; name: string; initials: string; avatar_color: string }): TeamMember {
+  return { id: r.id, name: r.name, initials: r.initials, avatarColor: r.avatar_color };
+}
+
+// ==========================================
+// Inicializace – načtení dat + jednorázová migrace z localStorage
+// ==========================================
+let initPromise: Promise<void> | null = null;
+
+export function initStorage(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    // Načíst paralelně všechny tabulky
+    const [qRes, mRes, sRes, dRes, tRes] = await Promise.all([
+      supabase.from("quarters").select("*"),
+      supabase.from("members").select("*"),
+      supabase.from("segments").select("*"),
+      supabase.from("delivery_types").select("*"),
+      supabase.from("tasks").select("*"),
+    ]);
+
+    cacheQuarters = (qRes.data ?? []).map((r) => ({ id: r.id, label: r.label }));
+    cacheMembers = (mRes.data ?? []).map(dbMember);
+    cacheSegments = (sRes.data ?? []).map((r) => ({ id: r.id, label: r.label }));
+    cacheDeliveryTypes = (dRes.data ?? []).map((r) => ({ id: r.id, label: r.label }));
+    cacheTasks = (tRes.data ?? []).map((r) => dbToTask(r as DbTask));
+
+    // Jednorázová migrace z localStorage, pokud je DB úplně prázdná
+    const dbEmpty =
+      cacheQuarters.length === 0 &&
+      cacheMembers.length === 0 &&
+      cacheSegments.length === 0 &&
+      cacheDeliveryTypes.length === 0 &&
+      cacheTasks.length === 0;
+
+    if (dbEmpty) {
+      await importFromLocalStorage();
+    }
+
+    // Realtime subscription
+    setupRealtime();
+
+    notify();
+  })();
+  return initPromise;
+}
+
+async function importFromLocalStorage() {
+  const lsQuarters = readLS<QuarterDef[]>("taskboard_quarters") ?? DEFAULT_QUARTERS;
+  const lsMembers = readLS<TeamMember[]>("taskboard_members") ?? DEFAULT_MEMBERS;
+  const lsSegments = readLS<CategoryDef[]>("taskboard_segments") ?? DEFAULT_SEGMENTS;
+  const lsDelivery = readLS<CategoryDef[]>("taskboard_delivery_types") ?? DEFAULT_DELIVERY_TYPES;
+  const lsTasksRaw = readLS<Task[]>("taskboard_tasks") ?? [];
+
+  // Migrace imageUrl → imageUrls a segmentId → segmentIds
+  const lsTasks: Task[] = lsTasksRaw.map((t) => ({
+    ...t,
+    imageUrls: t.imageUrls && t.imageUrls.length > 0 ? t.imageUrls : t.imageUrl ? [t.imageUrl] : [],
+    segmentIds: t.segmentIds && t.segmentIds.length > 0 ? t.segmentIds : t.segmentId ? [t.segmentId] : [],
+  }));
+
+  await Promise.all([
+    lsQuarters.length > 0
+      ? supabase.from("quarters").insert(lsQuarters.map((q) => ({ id: q.id, label: q.label })))
+      : Promise.resolve(),
+    lsMembers.length > 0
+      ? supabase.from("members").insert(
+          lsMembers.map((m) => ({ id: m.id, name: m.name, initials: m.initials, avatar_color: m.avatarColor }))
+        )
+      : Promise.resolve(),
+    lsSegments.length > 0
+      ? supabase.from("segments").insert(lsSegments.map((s) => ({ id: s.id, label: s.label })))
+      : Promise.resolve(),
+    lsDelivery.length > 0
+      ? supabase.from("delivery_types").insert(lsDelivery.map((d) => ({ id: d.id, label: d.label })))
+      : Promise.resolve(),
+    lsTasks.length > 0
+      ? supabase.from("tasks").insert(lsTasks.map((t) => taskToDb(t) as never))
+      : Promise.resolve(),
+  ]);
+
+  cacheQuarters = lsQuarters;
+  cacheMembers = lsMembers;
+  cacheSegments = lsSegments;
+  cacheDeliveryTypes = lsDelivery;
+  cacheTasks = lsTasks;
+}
+
+function readLS<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ==========================================
+// Realtime
+// ==========================================
+function setupRealtime() {
+  supabase
+    .channel("storage-sync")
+    .on("postgres_changes", { event: "*", schema: "public", table: "quarters" }, async () => {
+      const { data } = await supabase.from("quarters").select("*");
+      cacheQuarters = (data ?? []).map((r) => ({ id: r.id, label: r.label }));
+      notify();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "members" }, async () => {
+      const { data } = await supabase.from("members").select("*");
+      cacheMembers = (data ?? []).map(dbMember);
+      notify();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "segments" }, async () => {
+      const { data } = await supabase.from("segments").select("*");
+      cacheSegments = (data ?? []).map((r) => ({ id: r.id, label: r.label }));
+      notify();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "delivery_types" }, async () => {
+      const { data } = await supabase.from("delivery_types").select("*");
+      cacheDeliveryTypes = (data ?? []).map((r) => ({ id: r.id, label: r.label }));
+      notify();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, async () => {
+      const { data } = await supabase.from("tasks").select("*");
+      cacheTasks = (data ?? []).map((r) => dbToTask(r as DbTask));
+      notify();
+    })
+    .subscribe();
+}
+
+// ==========================================
 // Kvartály
 // ==========================================
-export function getQuarters(): QuarterDef[] { return getList(QUARTERS_KEY, DEFAULT_QUARTERS); }
+export function getQuarters(): QuarterDef[] { return cacheQuarters; }
 export function addQuarter(label: string): QuarterDef {
-  const list = getQuarters();
   const item: QuarterDef = { id: genId("q"), label };
-  list.push(item);
-  saveList(QUARTERS_KEY, list);
+  cacheQuarters = [...cacheQuarters, item];
+  notify();
+  supabase.from("quarters").insert({ id: item.id, label: item.label }).then();
   return item;
 }
-export function deleteQuarter(id: string): boolean {
-  const list = getQuarters();
-  const f = list.filter((q) => q.id !== id);
-  if (f.length === list.length) return false;
-  saveList(QUARTERS_KEY, f);
-  return true;
-}
 export function updateQuarter(id: string, label: string): QuarterDef | null {
-  const list = getQuarters();
-  const idx = list.findIndex((q) => q.id === id);
+  const idx = cacheQuarters.findIndex((q) => q.id === id);
   if (idx === -1) return null;
-  list[idx] = { ...list[idx], label };
-  saveList(QUARTERS_KEY, list);
-  return list[idx];
+  cacheQuarters = cacheQuarters.map((q) => (q.id === id ? { ...q, label } : q));
+  notify();
+  supabase.from("quarters").update({ label }).eq("id", id).then();
+  return cacheQuarters[idx];
+}
+export function deleteQuarter(id: string): boolean {
+  const before = cacheQuarters.length;
+  cacheQuarters = cacheQuarters.filter((q) => q.id !== id);
+  if (cacheQuarters.length === before) return false;
+  notify();
+  supabase.from("quarters").delete().eq("id", id).then();
+  return true;
 }
 
 // ==========================================
 // Členové
 // ==========================================
-export function getMembers(): TeamMember[] { return getList(MEMBERS_KEY, DEFAULT_MEMBERS); }
-export function getMemberById(id: string): TeamMember | undefined { return getMembers().find((m) => m.id === id); }
+export function getMembers(): TeamMember[] { return cacheMembers; }
+export function getMemberById(id: string): TeamMember | undefined { return cacheMembers.find((m) => m.id === id); }
 export function addMember(data: Omit<TeamMember, "id">): TeamMember {
-  const list = getMembers();
   const item: TeamMember = { ...data, id: genId("m") };
-  list.push(item);
-  saveList(MEMBERS_KEY, list);
+  cacheMembers = [...cacheMembers, item];
+  notify();
+  supabase.from("members").insert({ id: item.id, name: item.name, initials: item.initials, avatar_color: item.avatarColor }).then();
   return item;
 }
 export function updateMember(id: string, data: Partial<Omit<TeamMember, "id">>): TeamMember | null {
-  const list = getMembers();
-  const idx = list.findIndex((m) => m.id === id);
+  const idx = cacheMembers.findIndex((m) => m.id === id);
   if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...data };
-  saveList(MEMBERS_KEY, list);
-  return list[idx];
+  const updated = { ...cacheMembers[idx], ...data };
+  cacheMembers = cacheMembers.map((m) => (m.id === id ? updated : m));
+  notify();
+  const dbPatch: { name?: string; initials?: string; avatar_color?: string } = {};
+  if (data.name !== undefined) dbPatch.name = data.name;
+  if (data.initials !== undefined) dbPatch.initials = data.initials;
+  if (data.avatarColor !== undefined) dbPatch.avatar_color = data.avatarColor;
+  supabase.from("members").update(dbPatch).eq("id", id).then();
+  return updated;
 }
 export function deleteMember(id: string): boolean {
-  const list = getMembers();
-  const f = list.filter((m) => m.id !== id);
-  if (f.length === list.length) return false;
-  saveList(MEMBERS_KEY, f);
+  const before = cacheMembers.length;
+  cacheMembers = cacheMembers.filter((m) => m.id !== id);
+  if (cacheMembers.length === before) return false;
+  notify();
+  supabase.from("members").delete().eq("id", id).then();
   return true;
 }
 
 // ==========================================
 // Segmenty
 // ==========================================
-export function getSegments(): CategoryDef[] { return getList(SEGMENTS_KEY, DEFAULT_SEGMENTS); }
+export function getSegments(): CategoryDef[] { return cacheSegments; }
 export function addSegment(label: string): CategoryDef {
-  const list = getSegments();
   const item: CategoryDef = { id: genId("seg"), label };
-  list.push(item);
-  saveList(SEGMENTS_KEY, list);
+  cacheSegments = [...cacheSegments, item];
+  notify();
+  supabase.from("segments").insert({ id: item.id, label: item.label }).then();
   return item;
 }
 export function updateSegment(id: string, label: string): CategoryDef | null {
-  const list = getSegments();
-  const idx = list.findIndex((s) => s.id === id);
+  const idx = cacheSegments.findIndex((s) => s.id === id);
   if (idx === -1) return null;
-  list[idx] = { ...list[idx], label };
-  saveList(SEGMENTS_KEY, list);
-  return list[idx];
+  cacheSegments = cacheSegments.map((s) => (s.id === id ? { ...s, label } : s));
+  notify();
+  supabase.from("segments").update({ label }).eq("id", id).then();
+  return cacheSegments[idx];
 }
 export function deleteSegment(id: string): boolean {
-  const list = getSegments();
-  const f = list.filter((s) => s.id !== id);
-  if (f.length === list.length) return false;
-  saveList(SEGMENTS_KEY, f);
+  const before = cacheSegments.length;
+  cacheSegments = cacheSegments.filter((s) => s.id !== id);
+  if (cacheSegments.length === before) return false;
+  notify();
+  supabase.from("segments").delete().eq("id", id).then();
   return true;
 }
 
 // ==========================================
 // Druhy dodávky
 // ==========================================
-export function getDeliveryTypes(): CategoryDef[] { return getList(DELIVERY_TYPES_KEY, DEFAULT_DELIVERY_TYPES); }
+export function getDeliveryTypes(): CategoryDef[] { return cacheDeliveryTypes; }
 export function addDeliveryType(label: string): CategoryDef {
-  const list = getDeliveryTypes();
   const item: CategoryDef = { id: genId("dt"), label };
-  list.push(item);
-  saveList(DELIVERY_TYPES_KEY, list);
+  cacheDeliveryTypes = [...cacheDeliveryTypes, item];
+  notify();
+  supabase.from("delivery_types").insert({ id: item.id, label: item.label }).then();
   return item;
 }
 export function updateDeliveryType(id: string, label: string): CategoryDef | null {
-  const list = getDeliveryTypes();
-  const idx = list.findIndex((d) => d.id === id);
+  const idx = cacheDeliveryTypes.findIndex((d) => d.id === id);
   if (idx === -1) return null;
-  list[idx] = { ...list[idx], label };
-  saveList(DELIVERY_TYPES_KEY, list);
-  return list[idx];
+  cacheDeliveryTypes = cacheDeliveryTypes.map((d) => (d.id === id ? { ...d, label } : d));
+  notify();
+  supabase.from("delivery_types").update({ label }).eq("id", id).then();
+  return cacheDeliveryTypes[idx];
 }
 export function deleteDeliveryType(id: string): boolean {
-  const list = getDeliveryTypes();
-  const f = list.filter((d) => d.id !== id);
-  if (f.length === list.length) return false;
-  saveList(DELIVERY_TYPES_KEY, f);
+  const before = cacheDeliveryTypes.length;
+  cacheDeliveryTypes = cacheDeliveryTypes.filter((d) => d.id !== id);
+  if (cacheDeliveryTypes.length === before) return false;
+  notify();
+  supabase.from("delivery_types").delete().eq("id", id).then();
   return true;
 }
 
 // ==========================================
 // Úkoly
 // ==========================================
-export function getTasks(): Task[] {
-  const data = localStorage.getItem(TASKS_KEY);
-  if (!data) {
-    localStorage.setItem(TASKS_KEY, JSON.stringify(DEFAULT_TASKS));
-    return DEFAULT_TASKS;
-  }
-  // Migrace: imageUrl → imageUrls
-  const tasks: Task[] = JSON.parse(data);
-  let migrated = false;
-  tasks.forEach((t) => {
-    if (t.imageUrl && (!t.imageUrls || t.imageUrls.length === 0)) {
-      t.imageUrls = [t.imageUrl];
-      delete t.imageUrl;
-      migrated = true;
-    }
-  });
-  if (migrated) saveTasks(tasks);
-  return tasks;
-}
-
-function saveTasks(tasks: Task[]): void {
-  localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
-}
+export function getTasks(): Task[] { return cacheTasks; }
 
 export function createTask(task: Omit<Task, "id" | "createdAt" | "updatedAt">): Task {
-  const tasks = getTasks();
-  const newTask: Task = {
-    ...task,
-    id: genId("t"),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  tasks.push(newTask);
-  saveTasks(tasks);
+  const now = new Date().toISOString();
+  const newTask: Task = { ...task, id: genId("t"), createdAt: now, updatedAt: now };
+  cacheTasks = [...cacheTasks, newTask];
+  notify();
+  supabase.from("tasks").insert(taskToDb(newTask) as never).then();
   return newTask;
 }
 
 export function updateTask(id: string, updates: Partial<Omit<Task, "id" | "createdAt">>): Task | null {
-  const tasks = getTasks();
-  const index = tasks.findIndex((t) => t.id === id);
-  if (index === -1) return null;
-  tasks[index] = { ...tasks[index], ...updates, updatedAt: new Date().toISOString() };
-  saveTasks(tasks);
-  return tasks[index];
+  const idx = cacheTasks.findIndex((t) => t.id === id);
+  if (idx === -1) return null;
+  const updated: Task = { ...cacheTasks[idx], ...updates, updatedAt: new Date().toISOString() };
+  cacheTasks = cacheTasks.map((t) => (t.id === id ? updated : t));
+  notify();
+  supabase.from("tasks").update(taskToDb(updates) as never).eq("id", id).then();
+  return updated;
 }
 
 export function deleteTask(id: string): boolean {
-  const tasks = getTasks();
-  const filtered = tasks.filter((t) => t.id !== id);
-  if (filtered.length === tasks.length) return false;
-  saveTasks(filtered);
+  const before = cacheTasks.length;
+  cacheTasks = cacheTasks.filter((t) => t.id !== id);
+  if (cacheTasks.length === before) return false;
+  notify();
+  supabase.from("tasks").delete().eq("id", id).then();
   return true;
 }
