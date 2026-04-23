@@ -14,7 +14,141 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      delivery_types: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          label: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+        }
+        Relationships: []
+      }
+      members: {
+        Row: {
+          avatar_color: string
+          created_at: string
+          id: string
+          initials: string
+          name: string
+        }
+        Insert: {
+          avatar_color: string
+          created_at?: string
+          id: string
+          initials: string
+          name: string
+        }
+        Update: {
+          avatar_color?: string
+          created_at?: string
+          id?: string
+          initials?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      quarters: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          label: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+        }
+        Relationships: []
+      }
+      segments: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          label: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          created_at: string
+          delay_reason: string | null
+          delivery_type_id: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          image_urls: string[]
+          new_quarter_id: string | null
+          owner_id: string | null
+          participant_ids: string[]
+          quarter_id: string | null
+          segment_ids: string[]
+          start_date: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delay_reason?: string | null
+          delivery_type_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          id: string
+          image_urls?: string[]
+          new_quarter_id?: string | null
+          owner_id?: string | null
+          participant_ids?: string[]
+          quarter_id?: string | null
+          segment_ids?: string[]
+          start_date?: string | null
+          status: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delay_reason?: string | null
+          delivery_type_id?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          image_urls?: string[]
+          new_quarter_id?: string | null
+          owner_id?: string | null
+          participant_ids?: string[]
+          quarter_id?: string | null
+          segment_ids?: string[]
+          start_date?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
