@@ -306,7 +306,7 @@ export function updateMember(id: string, data: Partial<Omit<TeamMember, "id">>):
   const updated = { ...cacheMembers[idx], ...data };
   cacheMembers = cacheMembers.map((m) => (m.id === id ? updated : m));
   notify();
-  const dbPatch: Record<string, unknown> = {};
+  const dbPatch: { name?: string; initials?: string; avatar_color?: string } = {};
   if (data.name !== undefined) dbPatch.name = data.name;
   if (data.initials !== undefined) dbPatch.initials = data.initials;
   if (data.avatarColor !== undefined) dbPatch.avatar_color = data.avatarColor;
