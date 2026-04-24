@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const PASSWORD = "LukasKrch@jehoTým1";
+const PASSWORD = "LukasKrch@jehoTym1";
 const STORAGE_KEY = "app_auth_v1";
 
 export const PasswordGate = ({ children }: { children: React.ReactNode }) => {
