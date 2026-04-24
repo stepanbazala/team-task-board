@@ -27,6 +27,42 @@ function randomColor(): string {
   return `hsl(${hue}, 65%, 45%)`;
 }
 
+/** Předvolená paleta barev pro avatary */
+const COLOR_PALETTE = [
+  "hsl(214, 80%, 40%)", // modrá
+  "hsl(280, 60%, 50%)", // fialová
+  "hsl(152, 60%, 40%)", // zelená
+  "hsl(36, 95%, 50%)",  // oranžová
+  "hsl(340, 70%, 50%)", // růžová
+  "hsl(0, 70%, 50%)",   // červená
+  "hsl(190, 75%, 42%)", // tyrkysová
+  "hsl(48, 90%, 48%)",  // žlutá
+  "hsl(258, 60%, 55%)", // indigo
+  "hsl(120, 45%, 38%)", // tmavě zelená
+  "hsl(15, 75%, 50%)",  // cihlová
+  "hsl(220, 15%, 35%)", // šedá
+];
+
+/** Komponenta pro výběr barvy z palety */
+function ColorPicker({ value, onChange }: { value: string; onChange: (color: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {COLOR_PALETTE.map((color) => (
+        <button
+          key={color}
+          type="button"
+          onClick={() => onChange(color)}
+          className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${
+            value === color ? "border-foreground scale-110" : "border-transparent"
+          }`}
+          style={{ backgroundColor: color }}
+          title={color}
+        />
+      ))}
+    </div>
+  );
+}
+
 function sortQuarters(quarters: QuarterDef[]): QuarterDef[] {
   return [...quarters].sort((a, b) => {
     const parseQ = (label: string) => {
