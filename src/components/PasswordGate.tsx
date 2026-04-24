@@ -1,17 +1,28 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const PASSWORD = "LukasKrch@jehoTym1";
+const LEGACY_PASSWORD = "LukasKrch@jehoTým1";
 const STORAGE_KEY = "app_auth_v1";
+
+const normalizePassword = (input: string) =>
+  input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 
 export const PasswordGate = ({ children }: { children: React.ReactNode }) => {
   const [authed, setAuthed] = useState(false);
   const [value, setValue] = useState("");
   const [error, setError] = useState(false);
   const [ready, setReady] = useState(false);
+  const allowedPasswords = useMemo(
+    () => new Set([normalizePassword(PASSWORD), normalizePassword(LEGACY_PASSWORD)]),
+    [],
+  );
 
   useEffect(() => {
     setAuthed(localStorage.getItem(STORAGE_KEY) === "1");
@@ -20,7 +31,7 @@ export const PasswordGate = ({ children }: { children: React.ReactNode }) => {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (value === PASSWORD) {
+    if (allowedPasswords.has(normalizePassword(value))) {
       localStorage.setItem(STORAGE_KEY, "1");
       setAuthed(true);
       setError(false);
