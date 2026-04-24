@@ -222,31 +222,41 @@ export function SettingsDialog({ open, onOpenChange, quarters, members, segments
             </div>
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {members.map((m) => (
-                <div key={m.id} className="flex flex-col gap-2 p-2 rounded-lg bg-secondary/50">
-                  <div className="flex items-center gap-3">
-                    <TeamAvatar member={m} size="sm" />
-                    {editingMId === m.id ? (
-                      <>
-                        <Input value={editMName} onChange={(e) => setEditMName(e.target.value)} className="h-8 text-sm flex-1" onKeyDown={(e) => e.key === "Enter" && handleEditMSave()} />
-                        <button onClick={handleEditMSave} className="p-1 text-primary hover:bg-accent rounded"><Check className="w-4 h-4" /></button>
-                        <button onClick={() => setEditingMId(null)} className="p-1 text-muted-foreground hover:bg-accent rounded"><X className="w-4 h-4" /></button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="flex-1 text-sm font-medium">{m.name}</span>
-                        <button onClick={() => { setEditingMId(m.id); setEditMName(m.name); }} className="p-1 text-muted-foreground hover:text-primary hover:bg-accent rounded"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => handleDeleteM(m.id)} className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </>
-                    )}
-                  </div>
-                  <ColorPicker
-                    value={m.avatarColor}
-                    onChange={(color) => {
-                      updateMember(m.id, { avatarColor: color });
-                      onChanged();
-                      toast.success("Barva změněna");
-                    }}
-                  />
+                <div key={m.id} className="flex items-center gap-3 p-2 rounded-lg bg-secondary/50">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="rounded-full ring-offset-background transition hover:ring-2 hover:ring-ring hover:ring-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        title="Změnit barvu"
+                      >
+                        <TeamAvatar member={m} size="sm" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3" align="start">
+                      <div className="text-xs font-medium text-muted-foreground mb-2">Vyberte barvu</div>
+                      <ColorPicker
+                        value={m.avatarColor}
+                        onChange={(color) => {
+                          updateMember(m.id, { avatarColor: color });
+                          onChanged();
+                          toast.success("Barva změněna");
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  {editingMId === m.id ? (
+                    <>
+                      <Input value={editMName} onChange={(e) => setEditMName(e.target.value)} className="h-8 text-sm flex-1" onKeyDown={(e) => e.key === "Enter" && handleEditMSave()} />
+                      <button onClick={handleEditMSave} className="p-1 text-primary hover:bg-accent rounded"><Check className="w-4 h-4" /></button>
+                      <button onClick={() => setEditingMId(null)} className="p-1 text-muted-foreground hover:bg-accent rounded"><X className="w-4 h-4" /></button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm font-medium">{m.name}</span>
+                      <button onClick={() => { setEditingMId(m.id); setEditMName(m.name); }} className="p-1 text-muted-foreground hover:text-primary hover:bg-accent rounded"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleDeleteM(m.id)} className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
